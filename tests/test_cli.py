@@ -42,22 +42,11 @@ def test_todo_error_defaults_to_exit_1():
     assert TodoError("boom").exit_code == 1
 
 
-def test_no_action_dispatches_to_list(capsys):
-    code, out, err = run(capsys)
-    assert code == 1
-    assert out == ""
-    assert err == "todo: error: --list is not implemented yet\n"
-
-
-def test_all_alone_means_list_all(capsys):
-    code, _, err = run(capsys, "--all")
-    assert code == 1
-    assert "--list is not implemented yet" in err
-
-
 @pytest.mark.parametrize(
     ("argv", "action"),
     [
+        ([], "--list"),
+        (["--all"], "--list"),
         (["--init"], "--init"),
         (["--open", "Title"], "--open"),
         (["--open", "Title", "--priority", "high", "--due", "today"], "--open"),
@@ -154,6 +143,7 @@ def test_module_help_in_subprocess(tmp_path):
     env = {**os.environ, "HOME": str(tmp_path), "TODO_FILE": str(tmp_path / "t")}
     result = subprocess.run(
         [sys.executable, "-m", "todo", "--help"],
+        check=False,
         capture_output=True,
         text=True,
         env=env,

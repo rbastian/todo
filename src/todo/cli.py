@@ -18,13 +18,17 @@ examples:
   todo --delete k7m2
 """
 
-# The actions that each modifier can go with.
+# The action flags in the mutually exclusive group. --note is also an action,
+# but it sits outside the group because it is a modifier of --open too.
+ACTIONS = ("init", "open", "list", "today", "show", "update", "done", "delete")
+
+# The actions that each modifier can go with, keyed by argparse dest.
 MODIFIERS = {
-    "priority": ("--priority", {"open", "update"}),
-    "due": ("--due", {"open", "update"}),
-    "clear_due": ("--clear-due", {"update"}),
-    "title": ("--title", {"update"}),
-    "all": ("--all", {"list"}),
+    "priority": {"open", "update"},
+    "due": {"open", "update"},
+    "clear_due": {"update"},
+    "title": {"update"},
+    "all": {"list"},
 }
 
 
@@ -67,10 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["high", "normal", "low"],
         help="priority, with --open or --update",
     )
-    parser.add_argument(
+    due = parser.add_mutually_exclusive_group()
+    due.add_argument(
         "--due", metavar="DATE", help="YYYY-MM-DD or today, with --open or --update"
     )
-    parser.add_argument(
+    due.add_argument(
         "--clear-due", action="store_true", help="remove the due date, with --update"
     )
     parser.add_argument("--title", metavar="TEXT", help="new title, with --update")
@@ -82,33 +87,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 def resolve_action(parser: argparse.ArgumentParser, args: argparse.Namespace) -> str:
     """Return the action name and reject invalid combinations with exit 2."""
-    chosen = [
-        name
-        for name in ("init", "open", "list", "today", "show", "update", "done", "delete")
-        if getattr(args, name) not in (None, False)
-    ]
-    action = chosen[0] if chosen else None
+    action = next(
+        (name for name in ACTIONS if getattr(args, name) not in (None, False)), None
+    )
 
     if args.note is not None:
-        if action is None:
-            if len(args.note) != 2:
-                parser.error("--note takes an ID and a TEXT")
-            action = "note"
-        elif action == "open":
-            if len(args.note) != 1:
-                parser.error("--note with --open takes one TEXT")
-        else:
+        if action not in (None, "open"):
             parser.error(f"argument --note: not allowed with argument --{action}")
+        elif action is None and len(args.note) != 2:
+            parser.error("--note takes an ID and a TEXT")
+        elif action == "open" and len(args.note) != 1:
+            parser.error("--note with --open takes one TEXT")
+        action = action or "note"
 
-    if action is None:
-        action = "list"
+    action = action or "list"
 
-    for dest, (flag, allowed) in MODIFIERS.items():
+    for dest, allowed in MODIFIERS.items():
         if getattr(args, dest) not in (None, False) and action not in allowed:
+            flag = "--" + dest.replace("_", "-")
             parser.error(f"argument {flag}: not allowed with argument --{action}")
-
-    if args.due is not None and args.clear_due:
-        parser.error("argument --clear-due: not allowed with argument --due")
 
     return action
 
@@ -120,20 +117,7 @@ def not_implemented(action: str):
     return handler
 
 
-HANDLERS = {
-    action: not_implemented(action)
-    for action in (
-        "init",
-        "open",
-        "list",
-        "today",
-        "show",
-        "update",
-        "note",
-        "done",
-        "delete",
-    )
-}
+HANDLERS = {action: not_implemented(action) for action in (*ACTIONS, "note")}
 
 
 def main(argv: list[str] | None = None) -> int:
