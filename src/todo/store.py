@@ -1,5 +1,6 @@
 """The todo record, its JSONL serialization and the validated load."""
 
+import contextlib
 import fcntl
 import json
 import os
@@ -251,7 +252,9 @@ def _before_replace(tmp_name: str) -> None:
     """Run between the temporary write and the replace. Tests patch it to fail."""
 
 
-def _replace(path: str, text: str, tmp_dir: str | os.PathLike, new_mode) -> None:
+def _replace(
+    path: str, text: str, tmp_dir: str | os.PathLike, new_mode: int | None
+) -> None:
     fd, tmp_name = tempfile.mkstemp(dir=tmp_dir, prefix=".todos.", suffix=".tmp")
     try:
         with os.fdopen(fd, "wb") as file:
@@ -266,10 +269,8 @@ def _replace(path: str, text: str, tmp_dir: str | os.PathLike, new_mode) -> None
         _before_replace(tmp_name)
         os.replace(tmp_name, path)
     except BaseException:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp_name)
-        except FileNotFoundError:
-            pass
         raise
     _fsync_dir(os.path.dirname(path))
 

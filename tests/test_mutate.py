@@ -1,3 +1,4 @@
+import fcntl
 import os
 import stat
 import subprocess
@@ -206,32 +207,15 @@ def test_lock_timeout_raises_todo_error(tmp_path, monkeypatch):
     path = tmp_path / "todos.jsonl"
     lock_path = tmp_path / "todos.jsonl.lock"
     monkeypatch.setattr(store, "LOCK_TIMEOUT", 0.2)
-    holder = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            textwrap.dedent(
-                f"""
-                import fcntl, os, sys, time
-                fd = os.open({str(lock_path)!r}, os.O_RDWR | os.O_CREAT, 0o600)
-                fcntl.flock(fd, fcntl.LOCK_EX)
-                print("locked", flush=True)
-                sys.stdin.read()
-                """
-            ),
-        ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
+    holder = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(holder, fcntl.LOCK_EX)
     try:
-        assert holder.stdout.readline() == "locked\n"
         with pytest.raises(TodoError) as caught:
             mutate(path, add(todo("aaaa")))
-        assert str(caught.value) == f"timed out waiting for the lock on {path}"
-        assert caught.value.exit_code == 1
     finally:
-        holder.communicate("")
+        os.close(holder)
+    assert str(caught.value) == f"timed out waiting for the lock on {path}"
+    assert caught.value.exit_code == 1
     assert not path.exists()
 
 
