@@ -1,13 +1,15 @@
+import errno
 import json
+import os
 import subprocess
 from datetime import date
 
 import pytest
 
-from todo import ids
+from todo import ids, store
 from todo.cli import main, parse_due
 from todo.errors import TodoError
-from todo.store import TIMESTAMP_RE, load
+from todo.store import TIMESTAMP_RE, TMP_SUFFIX, load
 
 
 @pytest.fixture
@@ -242,3 +244,20 @@ def test_repository_list_keeps_git_status_clean(capsys, tmp_path, monkeypatch):
     status = git("status", "--porcelain", "--untracked-files=all")
     assert status.splitlines() == [" M .todo/todos.jsonl"]
     assert sorted(p.name for p in (root / ".todo").iterdir()) == ["todos.jsonl"]
+
+
+def test_failed_replace_names_the_data_file(capsys, data_file, monkeypatch):
+    open_todo(capsys, data_file, "First")
+    original = data_file.read_bytes()
+
+    def fail(src, dst):
+        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), src, dst)
+
+    monkeypatch.setattr(store.os, "replace", fail)
+
+    code, out, err = run(capsys, "--open", "Second")
+
+    assert (code, out) == (1, "")
+    assert err == f"todo: error: cannot write {data_file}: Permission denied\n"
+    assert TMP_SUFFIX not in err
+    assert data_file.read_bytes() == original
