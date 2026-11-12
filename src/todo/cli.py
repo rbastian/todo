@@ -8,7 +8,7 @@ from datetime import date
 from todo import store
 from todo.datafile import init_repo_list, mutate_resolved, resolve_data_file
 from todo.errors import TodoError
-from todo.ids import new_id
+from todo.ids import new_id, normalize_id
 from todo.store import PRIORITIES, Note, Todo, is_date, load, utc_now
 
 EXAMPLES = """\
@@ -207,6 +207,43 @@ def list_today(args: argparse.Namespace) -> int:
     return 0
 
 
+def format_todo(todo: Todo) -> str:
+    """Return the --show layout: one field per line, labels padded to 11."""
+    fields = [
+        ("id", todo.id),
+        ("title", todo.title),
+        ("status", todo.status),
+        ("priority", todo.priority),
+        ("due", todo.due_date or "-"),
+        ("created", todo.created_at),
+        ("updated", todo.updated_at),
+        ("completed", todo.completed_at or "-"),
+    ]
+    lines = [f"{label + ':':<11}{value}" for label, value in fields]
+    if not todo.notes:
+        lines.append(f"{'notes:':<11}-")
+    else:
+        lines.append("notes:")
+        for note in todo.notes:
+            lines.append(f"  {note.created_at}")
+            lines.extend(f"    {line}" for line in note.text.split("\n"))
+    return "\n".join(lines)
+
+
+def find_todo(records: list[Todo], todo_id: str) -> Todo:
+    """Return the todo with this ID, or raise a missing-ID error (exit 1)."""
+    for todo in records:
+        if todo.id == todo_id:
+            return todo
+    raise TodoError(f"no todo with ID '{todo_id}'")
+
+
+def show_todo(args: argparse.Namespace) -> int:
+    todo_id = normalize_id(args.show)
+    print(format_todo(find_todo(load(resolve_data_file().path), todo_id)))
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -217,6 +254,7 @@ HANDLERS["open"] = open_todo
 HANDLERS["init"] = handle_init
 HANDLERS["list"] = list_todos
 HANDLERS["today"] = list_today
+HANDLERS["show"] = show_todo
 
 
 def main(argv: list[str] | None = None) -> int:
