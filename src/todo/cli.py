@@ -2,12 +2,14 @@
 
 import argparse
 import sys
+from collections.abc import Callable
 from datetime import date
 
+from todo import store
 from todo.datafile import init_repo_list, mutate_resolved, resolve_data_file
 from todo.errors import TodoError
 from todo.ids import new_id
-from todo.store import Note, Todo, is_date, utc_now
+from todo.store import PRIORITIES, Note, Todo, is_date, load, utc_now
 
 EXAMPLES = """\
 examples:
@@ -143,7 +145,7 @@ def parse_note(text: str) -> str:
 
 def open_todo(args: argparse.Namespace) -> int:
     title = parse_title(args.open)
-    due_date = None if args.due is None else parse_due(args.due, date.today())
+    due_date = None if args.due is None else parse_due(args.due, store.today())
     note = None if args.note is None else parse_note(args.note[0])
 
     def change(records: list[Todo]) -> tuple[list[Todo], str]:
@@ -165,6 +167,46 @@ def open_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def sort_key(todo: Todo) -> tuple:
+    """Priority, then due date with undated last, then creation time and ID."""
+    return (
+        PRIORITIES.index(todo.priority),
+        todo.due_date is None,
+        todo.due_date or "",
+        todo.created_at,
+        todo.id,
+    )
+
+
+def format_row(todo: Todo) -> str:
+    return (
+        f"{todo.id}  {todo.status}  {todo.priority:<6}  "
+        f"{todo.due_date or '-':<10}  {todo.title}"
+    )
+
+
+def print_rows(keep: Callable[[Todo], bool]) -> None:
+    """Print the kept todos of the data file: open ones first, each group sorted."""
+    todos = sorted(
+        (todo for todo in load(resolve_data_file().path) if keep(todo)),
+        key=lambda todo: (todo.status != "open", *sort_key(todo)),
+    )
+    sys.stdout.write("".join(format_row(todo) + "\n" for todo in todos))
+
+
+def list_todos(args: argparse.Namespace) -> int:
+    # The bead design: todo --all without --list shows open todos only.
+    show_done = args.list and args.all
+    print_rows(lambda todo: show_done or todo.status == "open")
+    return 0
+
+
+def list_today(args: argparse.Namespace) -> int:
+    due = store.today().isoformat()
+    print_rows(lambda todo: todo.status == "open" and todo.due_date == due)
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -173,6 +215,8 @@ def handle_init(args: argparse.Namespace) -> int:
 HANDLERS = {action: not_implemented(action) for action in (*ACTIONS, "note")}
 HANDLERS["open"] = open_todo
 HANDLERS["init"] = handle_init
+HANDLERS["list"] = list_todos
+HANDLERS["today"] = list_today
 
 
 def main(argv: list[str] | None = None) -> int:

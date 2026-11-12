@@ -58,6 +58,11 @@ def utc_now() -> str:
     return datetime.now(UTC).strftime(TIMESTAMP_FORMAT)
 
 
+def today() -> date:
+    """Return the local calendar date. Tests patch it, or patch time.time."""
+    return date.fromtimestamp(time.time())
+
+
 def dumps(records: list[Todo]) -> str:
     """Serialize records sorted by ID, one JSON line each."""
     return "".join(
