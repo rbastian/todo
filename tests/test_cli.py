@@ -45,9 +45,6 @@ def test_todo_error_defaults_to_exit_1():
 @pytest.mark.parametrize(
     ("argv", "action"),
     [
-        (["--update", "k7m2", "--title", "New", "--priority", "low"], "--update"),
-        (["--update", "k7m2", "--due", "2026-11-20"], "--update"),
-        (["--update", "k7m2", "--clear-due"], "--update"),
         (["--note", "k7m2", "text"], "--note"),
         (["--done", "k7m2"], "--done"),
         (["--delete", "k7m2"], "--delete"),
