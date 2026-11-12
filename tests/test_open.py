@@ -214,7 +214,9 @@ def test_storage_failure_exits_1_with_message(capsys, tmp_path, monkeypatch):
 
 def test_repository_list_keeps_git_status_clean(capsys, tmp_path, monkeypatch):
     def git(*args):
-        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+        return subprocess.run(
+            ["git", *args], cwd=root, check=True, capture_output=True, text=True
+        ).stdout
 
     root = tmp_path / "repo"
     (root / ".todo").mkdir(parents=True)
@@ -227,30 +229,16 @@ def test_repository_list_keeps_git_status_clean(capsys, tmp_path, monkeypatch):
     monkeypatch.chdir(root)
     git("init", "-q")
     git("add", "-A")
-    git(
-        "-c",
-        "user.name=Test",
-        "-c",
-        "user.email=test@example.com",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-q",
-        "-m",
-        "list",
-    )
+    git("config", "user.name", "Test")
+    git("config", "user.email", "test@example.com")
+    git("config", "commit.gpgsign", "false")
+    git("commit", "-q", "-m", "list")
 
     code, out, err = run(capsys, "--open", "Shared")
 
     assert (code, err) == (0, "")
     [record] = load(root / ".todo" / "todos.jsonl")
     assert out == record.id + "\n"
-    status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all"],
-        cwd=root,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    status = git("status", "--porcelain", "--untracked-files=all")
     assert status.splitlines() == [" M .todo/todos.jsonl"]
     assert sorted(p.name for p in (root / ".todo").iterdir()) == ["todos.jsonl"]

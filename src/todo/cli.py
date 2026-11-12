@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"todo: error: {error}", file=sys.stderr)
         return error.exit_code
     except OSError as error:
-        # A storage failure: report it without a traceback and exit 1.
+        # Any OS error, for example a storage failure: no traceback, exit 1.
         where = f"{error.filename}: " if error.filename else ""
         print(f"todo: error: {where}{error.strerror or error}", file=sys.stderr)
         return 1
