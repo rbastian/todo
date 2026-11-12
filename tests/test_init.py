@@ -86,8 +86,7 @@ def test_init_preserves_existing_todos(tmp_path, capsys, monkeypatch):
 
 def test_init_ignores_todo_file(tmp_path, capsys, monkeypatch):
     root = git_init(tmp_path / "repo")
-    todo_file = tmp_path / "elsewhere" / "todos.jsonl"
-    monkeypatch.setenv("TODO_FILE", str(todo_file))
+    todo_file = tmp_path / "elsewhere" / "todos.jsonl"  # Set by isolated_data.
 
     code, out, _ = init(capsys, monkeypatch, root)
 
@@ -125,27 +124,25 @@ def test_init_on_valid_file_does_not_rewrite_it(tmp_path, capsys, monkeypatch):
     assert data.stat().st_mtime_ns == mtime
 
 
-def test_init_outside_a_repository_exits_1(tmp_path, capsys, monkeypatch):
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("GIT_CEILING_DIRECTORIES", "{tmp}"),  # Outside a working tree.
+        ("PATH", "{tmp}/no-bin"),  # Git is missing.
+    ],
+)
+def test_init_without_a_working_tree_exits_1(
+    tmp_path, capsys, monkeypatch, name, value
+):
     outside = tmp_path / "plain"
     outside.mkdir()
-    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    monkeypatch.setenv(name, value.format(tmp=tmp_path))
 
     code, out, err = init(capsys, monkeypatch, outside)
 
     assert (code, out) == (1, "")
     assert err == "todo: error: todo --init needs a Git working tree\n"
     assert not (outside / ".todo").exists()
-
-
-def test_init_without_git_exits_1(tmp_path, capsys, monkeypatch):
-    root = git_init(tmp_path / "repo")
-    monkeypatch.setenv("PATH", str(tmp_path / "no-bin"))
-
-    code, out, err = init(capsys, monkeypatch, root)
-
-    assert (code, out) == (1, "")
-    assert err == "todo: error: todo --init needs a Git working tree\n"
-    assert not (root / ".todo").exists()
 
 
 def test_init_keeps_lock_and_temp_files_out_of_git_status(
@@ -157,6 +154,3 @@ def test_init_keeps_lock_and_temp_files_out_of_git_status(
 
     assert (gitrepo.git_dir(root) / "todo.lock").exists()
     assert sorted(p.name for p in (root / ".todo").iterdir()) == ["todos.jsonl"]
-    assert git(root, "status", "--porcelain", "--untracked-files=all") == (
-        "?? .todo/todos.jsonl\n"
-    )

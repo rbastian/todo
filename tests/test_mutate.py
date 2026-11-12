@@ -160,6 +160,35 @@ def test_unchanged_records_skip_the_write(tmp_path):
     assert path.stat().st_ino == inode
 
 
+def test_unchanged_records_without_create_leave_a_missing_file_missing(tmp_path):
+    path = tmp_path / "todos.jsonl"
+
+    mutate(path, lambda records: (records, None))
+
+    assert not path.exists()
+
+
+def test_create_writes_a_missing_file_empty(tmp_path):
+    path = tmp_path / "todos.jsonl"
+
+    mutate(path, lambda records: (records, None), create=True)
+
+    assert path.read_bytes() == b""
+    assert leftovers(tmp_path) == []
+
+
+def test_create_leaves_an_existing_file_unwritten(tmp_path):
+    path = tmp_path / "todos.jsonl"
+    path.write_text(dumps([todo("aaaa")]), encoding="utf-8")
+    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    inode = path.stat().st_ino
+
+    mutate(path, lambda records: (records, None), create=True)
+
+    assert path.stat().st_mtime_ns == 1_000_000_000
+    assert path.stat().st_ino == inode
+
+
 def test_symlinked_data_file_updates_its_target(tmp_path):
     target = tmp_path / "real" / "todos.jsonl"
     target.parent.mkdir()

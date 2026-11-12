@@ -1,6 +1,5 @@
 """Choose the data file that a command uses."""
 
-import contextlib
 import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -45,7 +44,9 @@ def same_filesystem(a: Path, b: Path) -> bool:
 
 
 def mutate_resolved[T](
-    resolved: Resolved, change: Callable[[list[Todo]], tuple[list[Todo], T]]
+    resolved: Resolved,
+    change: Callable[[list[Todo]], tuple[list[Todo], T]],
+    create: bool = False,
 ) -> T:
     """Run mutate on a resolved data file with the lock and temporary file placement.
 
@@ -55,7 +56,7 @@ def mutate_resolved[T](
     excluded through info/exclude.
     """
     if resolved.repo_root is None:
-        return mutate(resolved.path, change)
+        return mutate(resolved.path, change, create=create)
 
     meta = git_dir(resolved.repo_root)
     list_dir = resolved.path.parent
@@ -73,6 +74,7 @@ def mutate_resolved[T](
         tmp_dir=tmp_dir,
         tmp_prefix=tmp_prefix,
         new_mode=None,
+        create=create,
     )
 
 
@@ -87,13 +89,5 @@ def init_repo_list(cwd: Path | None = None) -> Path:
     if root is None:
         raise TodoError("todo --init needs a Git working tree")
     path = root / REPO_LIST
-
-    def create_if_missing(records: list[Todo]) -> tuple[list[Todo], None]:
-        # load treats a missing file as an empty list, and mutate writes
-        # nothing when the records do not change, so create the file here.
-        with contextlib.suppress(FileExistsError):
-            path.touch(exist_ok=False)
-        return records, None
-
-    mutate_resolved(Resolved(path, root), create_if_missing)
+    mutate_resolved(Resolved(path, root), lambda records: (records, None), create=True)
     return path

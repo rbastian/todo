@@ -220,13 +220,15 @@ def mutate[T](
     tmp_dir: str | os.PathLike | None = None,
     tmp_prefix: str = TMP_PREFIX,
     new_mode: int | None = 0o600,
+    create: bool = False,
 ) -> T:
     """Apply change to the records under the lock and replace the file atomically.
 
     change takes the loaded records and returns (new_records, result). mutate
     returns result. If the new records equal the old ones, the file is not
-    written. The temporary file is named tmp_prefix + random + TMP_SUFFIX. A new
-    data file gets new_mode, or the umask default if it is None.
+    written, unless create is set and the file is missing. The temporary file
+    is named tmp_prefix + random + TMP_SUFFIX. A new data file gets new_mode,
+    or the umask default if it is None.
     """
     path = os.path.realpath(path)
     directory = os.path.dirname(path)
@@ -240,7 +242,7 @@ def mutate[T](
         _lock(lock_fd, path)
         records = load(path)
         new_records, result = change(records)
-        if new_records != records:
+        if new_records != records or (create and not os.path.exists(path)):
             _replace(path, dumps(new_records), tmp_dir, tmp_prefix, new_mode)
         return result
     finally:
