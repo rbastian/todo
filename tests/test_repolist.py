@@ -10,7 +10,7 @@ from todo.datafile import Resolved, mutate_resolved, resolve_data_file
 from todo.errors import TodoError
 from todo.store import Note, Todo, load
 
-EXCLUDE_LINE = ".todo/.todos.*.tmp"
+EXCLUDE_LINE = ".todo/.todos.*.tmp"  # Written out on purpose: the spec value.
 
 
 def todo(id, title="A todo"):
@@ -93,6 +93,13 @@ def repo(tmp_path):
 @pytest.fixture
 def cross_filesystem(monkeypatch):
     monkeypatch.setattr(datafile, "same_filesystem", lambda a, b: False)
+
+
+@pytest.fixture
+def linked(repo, tmp_path):
+    path = tmp_path / "linked"
+    git(repo, "worktree", "add", "-q", str(path))
+    return path.resolve()
 
 
 def exclude_file(root: Path) -> Path:
@@ -210,10 +217,7 @@ def test_personal_list_keeps_private_defaults(tmp_path):
     assert (tmp_path / "personal" / "todos.jsonl.lock").exists()
 
 
-def test_linked_worktree_uses_its_own_git_dir(repo, tmp_path):
-    linked = tmp_path / "linked"
-    git(repo, "worktree", "add", "-q", str(linked))
-    linked = linked.resolve()
+def test_linked_worktree_uses_its_own_git_dir(repo, linked):
     resolved = resolve_data_file(cwd=linked, env={})
     assert resolved.repo_root == linked
     linked_git_dir = gitrepo.git_dir(linked)
@@ -234,5 +238,5 @@ def test_linked_worktree_fallback_stays_out_of_status(repo, tmp_path, cross_file
 
     mutate_resolved(resolved, add(todo("aaaa")))
 
-    assert exclude_file(linked.resolve()).read_text().count(EXCLUDE_LINE) == 1
+    assert exclude_file(linked).read_text().count(EXCLUDE_LINE) == 1
     assert porcelain(linked) == [" M .todo/todos.jsonl"]

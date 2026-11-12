@@ -6,13 +6,12 @@ from pathlib import Path
 from typing import NamedTuple
 
 from todo.gitrepo import exclude_locally, git_dir, git_toplevel
-from todo.store import Todo, mutate
+from todo.store import TMP_PREFIX, TMP_SUFFIX, Todo, mutate
 
 REPO_LIST = Path(".todo") / "todos.jsonl"
 PERSONAL_LIST = Path(".local") / "share" / "todo" / "todos.jsonl"
-# The reserved name of the temporary file in .todo/, and its exclude pattern.
-FALLBACK_TMP_PREFIX = ".todos."
-FALLBACK_EXCLUDE = ".todo/.todos.*.tmp"
+# The exclude pattern of the reserved temporary file name in .todo/.
+FALLBACK_EXCLUDE = f"{REPO_LIST.parent}/{TMP_PREFIX}*{TMP_SUFFIX}"
 
 
 class Resolved(NamedTuple):
@@ -58,12 +57,13 @@ def mutate_resolved[T](
 
     meta = git_dir(resolved.repo_root)
     list_dir = resolved.path.parent
+    # same_filesystem stats the directory, so it must exist first.
     list_dir.mkdir(parents=True, exist_ok=True)
     if same_filesystem(meta, list_dir):
         tmp_dir, tmp_prefix = meta, "todo-"
     else:
         exclude_locally(resolved.repo_root, FALLBACK_EXCLUDE)
-        tmp_dir, tmp_prefix = list_dir, FALLBACK_TMP_PREFIX
+        tmp_dir, tmp_prefix = list_dir, TMP_PREFIX
     return mutate(
         resolved.path,
         change,

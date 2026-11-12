@@ -6,35 +6,28 @@ from pathlib import Path
 from todo.errors import TodoError
 
 
-def _rev_parse(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "rev-parse", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def git_toplevel(cwd: Path) -> Path | None:
-    """Return the Git working-tree root of cwd, or None outside a working tree."""
-    try:
-        result = _rev_parse(cwd, "--show-toplevel")
-    except FileNotFoundError:
-        return None
-    if result.returncode != 0:
-        return None
-    return Path(result.stdout.rstrip("\n"))
-
-
 def _query(cwd: Path, *args: str) -> str:
     try:
-        result = _rev_parse(cwd, *args)
+        result = subprocess.run(
+            ["git", "rev-parse", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     except FileNotFoundError as error:
         raise TodoError("git is not installed") from error
     if result.returncode != 0:
         raise TodoError(f"{cwd}: git rev-parse failed: {result.stderr.strip()}")
     return result.stdout.rstrip("\n")
+
+
+def git_toplevel(cwd: Path) -> Path | None:
+    """Return the Git working-tree root of cwd, or None outside a working tree."""
+    try:
+        return Path(_query(cwd, "--show-toplevel"))
+    except TodoError:
+        return None
 
 
 def git_dir(cwd: Path) -> Path:

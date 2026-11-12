@@ -23,6 +23,9 @@ CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
 DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
+TMP_PREFIX = ".todos."
+TMP_SUFFIX = ".tmp"
+
 LOCK_TIMEOUT = 10.0
 LOCK_RETRY = 0.05
 
@@ -209,14 +212,14 @@ def mutate[T](
     *,
     lock_path: str | os.PathLike | None = None,
     tmp_dir: str | os.PathLike | None = None,
-    tmp_prefix: str = ".todos.",
+    tmp_prefix: str = TMP_PREFIX,
     new_mode: int | None = 0o600,
 ) -> T:
     """Apply change to the records under the lock and replace the file atomically.
 
     change takes the loaded records and returns (new_records, result). mutate
     returns result. If the new records equal the old ones, the file is not
-    written. The temporary file is named tmp_prefix + random + ".tmp". A new
+    written. The temporary file is named tmp_prefix + random + TMP_SUFFIX. A new
     data file gets new_mode, or the umask default if it is None.
     """
     path = os.path.realpath(path)
@@ -261,7 +264,7 @@ def _replace(
     tmp_prefix: str,
     new_mode: int | None,
 ) -> None:
-    fd, tmp_name = tempfile.mkstemp(dir=tmp_dir, prefix=tmp_prefix, suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(dir=tmp_dir, prefix=tmp_prefix, suffix=TMP_SUFFIX)
     try:
         with os.fdopen(fd, "wb") as file:
             file.write(text.encode("utf-8"))
