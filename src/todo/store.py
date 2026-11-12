@@ -144,14 +144,20 @@ def _check_text(value: object, name: str) -> str:
     return value
 
 
+def is_date(value: object) -> bool:
+    """Return whether value is a valid calendar date in exactly YYYY-MM-DD form."""
+    if not isinstance(value, str) or not DATE_RE.fullmatch(value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _check_date(value: object, name: str) -> None:
-    if isinstance(value, str) and DATE_RE.fullmatch(value):
-        try:
-            date.fromisoformat(value)
-            return
-        except ValueError:
-            pass
-    raise _InvalidRecord(f"{name} must be null or a date YYYY-MM-DD")
+    if not is_date(value):
+        raise _InvalidRecord(f"{name} must be null or a date YYYY-MM-DD")
 
 
 def _check_timestamp(value: object, name: str) -> str:

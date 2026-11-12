@@ -23,6 +23,10 @@ def run(capsys, *argv):
     return code, out, err
 
 
+def lock_file(data_file):
+    return data_file.with_name(data_file.name + ".lock")
+
+
 def open_todo(capsys, data_file, *argv):
     code, out, err = run(capsys, "--open", *argv)
     assert (code, err) == (0, "")
@@ -42,14 +46,6 @@ def test_title_only_todo(capsys, data_file):
     assert record.completed_at is None
     assert TIMESTAMP_RE.fullmatch(record.created_at)
     assert record.updated_at == record.created_at
-
-
-def test_stdout_is_only_the_id(capsys, data_file):
-    code, out, err = run(capsys, "--open", "A")
-    assert code == 0
-    assert err == ""
-    assert ids.ID_RE.fullmatch(out.removesuffix("\n"))
-    assert out.count("\n") == 1 and out.endswith("\n")
 
 
 def test_priority_due_and_note(capsys, data_file):
@@ -141,14 +137,14 @@ def test_invalid_input_exits_2_and_leaves_file_unchanged(
     assert out == ""
     assert err == f"todo: error: {message}\n"
     assert data_file.read_bytes() == before
-    assert not (data_file.parent / "todos.jsonl.lock").exists()
+    assert not lock_file(data_file).exists()
 
 
 def test_invalid_input_does_not_create_file(capsys, data_file):
     code, _, _ = run(capsys, "--open", "   ")
     assert code == 2
     assert not data_file.exists()
-    assert not data_file.parent.joinpath("todos.jsonl.lock").exists()
+    assert not lock_file(data_file).exists()
 
 
 def test_invalid_priority_exits_2(capsys, data_file):

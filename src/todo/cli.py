@@ -7,7 +7,7 @@ from datetime import date
 from todo.datafile import resolve_data_file
 from todo.errors import TodoError
 from todo.ids import new_id
-from todo.store import DATE_RE, Note, Todo, mutate, utc_now
+from todo.store import Note, Todo, is_date, mutate, utc_now
 
 EXAMPLES = """\
 examples:
@@ -119,11 +119,8 @@ def parse_due(text: str, today: date) -> str:
     """Return a due date as YYYY-MM-DD, or raise a CLI input error (exit 2)."""
     if text == "today":
         return today.isoformat()
-    if DATE_RE.fullmatch(text):
-        try:
-            return date.fromisoformat(text).isoformat()
-        except ValueError:
-            pass
+    if is_date(text):
+        return text
     raise TodoError(f"invalid date '{text}', use YYYY-MM-DD or today", exit_code=2)
 
 
@@ -147,7 +144,7 @@ def parse_note(text: str) -> str:
 def open_todo(args: argparse.Namespace) -> int:
     title = parse_title(args.open)
     due_date = None if args.due is None else parse_due(args.due, date.today())
-    note_texts = [] if args.note is None else [parse_note(args.note[0])]
+    note = None if args.note is None else parse_note(args.note[0])
 
     def change(records: list[Todo]) -> tuple[list[Todo], str]:
         now = utc_now()
@@ -157,7 +154,7 @@ def open_todo(args: argparse.Namespace) -> int:
             priority=args.priority or "normal",
             due_date=due_date,
             status="open",
-            notes=[Note(created_at=now, text=text) for text in note_texts],
+            notes=[] if note is None else [Note(created_at=now, text=note)],
             created_at=now,
             updated_at=now,
             completed_at=None,
