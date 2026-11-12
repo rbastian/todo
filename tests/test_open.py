@@ -9,7 +9,7 @@ import pytest
 from todo import ids, store
 from todo.cli import main, parse_due
 from todo.errors import TodoError
-from todo.store import TIMESTAMP_RE, TMP_SUFFIX, load
+from todo.store import TIMESTAMP_RE, load
 
 
 @pytest.fixture
@@ -250,14 +250,13 @@ def test_failed_replace_names_the_data_file(capsys, data_file, monkeypatch):
     open_todo(capsys, data_file, "First")
     original = data_file.read_bytes()
 
-    def fail(src, dst):
-        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), src, dst)
+    def fail(tmp_name):
+        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), tmp_name)
 
-    monkeypatch.setattr(store.os, "replace", fail)
+    monkeypatch.setattr(store, "_before_replace", fail)
 
     code, out, err = run(capsys, "--open", "Second")
 
     assert (code, out) == (1, "")
     assert err == f"todo: error: cannot write {data_file}: Permission denied\n"
-    assert TMP_SUFFIX not in err
     assert data_file.read_bytes() == original

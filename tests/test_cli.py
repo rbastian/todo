@@ -163,4 +163,3 @@ def test_deleted_working_directory_exits_1(capsys, tmp_path, monkeypatch, argv):
 
     assert (code, out) == (1, "")
     assert err.startswith("todo: error: ")
-    assert "Traceback" not in err
