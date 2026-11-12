@@ -4,10 +4,10 @@ import argparse
 import sys
 from datetime import date
 
-from todo.datafile import resolve_data_file
+from todo.datafile import mutate_resolved, resolve_data_file
 from todo.errors import TodoError
 from todo.ids import new_id
-from todo.store import Note, Todo, is_date, mutate, utc_now
+from todo.store import Note, Todo, is_date, utc_now
 
 EXAMPLES = """\
 examples:
@@ -161,7 +161,7 @@ def open_todo(args: argparse.Namespace) -> int:
         )
         return [*records, todo], todo.id
 
-    print(mutate(resolve_data_file().path, change))
+    print(mutate_resolved(resolve_data_file(), change))
     return 0
 
 
@@ -178,3 +178,8 @@ def main(argv: list[str] | None = None) -> int:
     except TodoError as error:
         print(f"todo: error: {error}", file=sys.stderr)
         return error.exit_code
+    except OSError as error:
+        # A storage failure: report it without a traceback and exit 1.
+        where = f"{error.filename}: " if error.filename else ""
+        print(f"todo: error: {where}{error.strerror or error}", file=sys.stderr)
+        return 1

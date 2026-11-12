@@ -1,4 +1,5 @@
 import json
+import subprocess
 from datetime import date
 
 import pytest
@@ -194,3 +195,62 @@ def test_parse_due_rejects(text):
         parse_due(text, TODAY)
     assert exc.value.exit_code == 2
     assert str(exc.value) == f"invalid date '{text}', use YYYY-MM-DD or today"
+
+
+def test_storage_failure_exits_1_with_message(capsys, tmp_path, monkeypatch):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("TODO_FILE", str(blocker / "todos.jsonl"))
+
+    code, out, err = run(capsys, "--open", "Title")
+
+    assert code == 1
+    assert out == ""
+    assert err.startswith("todo: error: ")
+    assert str(blocker) in err
+    assert "Traceback" not in err
+
+
+def test_repository_list_keeps_git_status_clean(capsys, tmp_path, monkeypatch):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+    root = tmp_path / "repo"
+    (root / ".todo").mkdir(parents=True)
+    (root / ".todo" / "todos.jsonl").touch()
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.delenv("TODO_FILE", raising=False)
+    monkeypatch.chdir(root)
+    git("init", "-q")
+    git("add", "-A")
+    git(
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-q",
+        "-m",
+        "list",
+    )
+
+    code, out, err = run(capsys, "--open", "Shared")
+
+    assert (code, err) == (0, "")
+    [record] = load(root / ".todo" / "todos.jsonl")
+    assert out == record.id + "\n"
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert status.splitlines() == [" M .todo/todos.jsonl"]
+    assert sorted(p.name for p in (root / ".todo").iterdir()) == ["todos.jsonl"]
