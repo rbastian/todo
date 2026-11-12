@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from collections.abc import Callable
 from datetime import date
 
 from todo import store
@@ -184,34 +185,25 @@ def format_row(todo: Todo) -> str:
     )
 
 
-def print_rows(todos: list[Todo]) -> None:
+def print_rows(keep: Callable[[Todo], bool]) -> None:
+    """Print the kept todos of the data file: open ones first, each group sorted."""
+    todos = sorted(
+        (todo for todo in load(resolve_data_file().path) if keep(todo)),
+        key=lambda todo: (todo.status != "open", *sort_key(todo)),
+    )
     sys.stdout.write("".join(format_row(todo) + "\n" for todo in todos))
 
 
 def list_todos(args: argparse.Namespace) -> int:
-    records = load(resolve_data_file().path)
     # The bead design: todo --all without --list shows open todos only.
-    groups = ("open", "done") if args.list and args.all else ("open",)
-    print_rows(
-        [
-            todo
-            for status in groups
-            for todo in sorted(records, key=sort_key)
-            if todo.status == status
-        ]
-    )
+    show_done = args.list and args.all
+    print_rows(lambda todo: show_done or todo.status == "open")
     return 0
 
 
 def list_today(args: argparse.Namespace) -> int:
     due = store.today().isoformat()
-    records = load(resolve_data_file().path)
-    print_rows(
-        sorted(
-            (r for r in records if r.status == "open" and r.due_date == due),
-            key=sort_key,
-        )
-    )
+    print_rows(lambda todo: todo.status == "open" and todo.due_date == due)
     return 0
 
 

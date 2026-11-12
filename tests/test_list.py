@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import sys
@@ -129,12 +128,7 @@ def test_order_does_not_depend_on_file_order(capsys, data_file):
         todo("bbbb", "high", "high"),
         todo("cccc", "normal"),
     ]
-    data_file.write_text(
-        "".join(
-            json.dumps(store.asdict(r), separators=(",", ":")) + "\n"
-            for r in reversed(records)
-        )
-    )
+    data_file.write_text("".join(dumps([r]) for r in reversed(records)))
     _, reversed_out, _ = run(capsys, "--list")
     write(data_file, *records)
     _, sorted_out, _ = run(capsys, "--list")
