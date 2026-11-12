@@ -4,27 +4,30 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-REPO_LIST = Path(".todo") / "todos.jsonl"
-PERSONAL_LIST = Path(".local") / "share" / "todo" / "todos.jsonl"
+from todo.datafile import PERSONAL_LIST, REPO_LIST
+from todo.store import load
 
 
 @pytest.fixture
 def env(tmp_path):
-    env = dict(os.environ)
-    env.pop("TODO_FILE", None)
-    for name in list(env):
-        if name.startswith("GIT_"):
-            del env[name]
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key != "TODO_FILE" and not key.startswith("GIT_")
+    }
     env.update(
         HOME=str(tmp_path / "home"),
         GIT_CONFIG_GLOBAL=os.devnull,
         GIT_CONFIG_NOSYSTEM="1",
         # Stop Git discovery at tmp_path, so that "outside" is outside any repository.
         GIT_CEILING_DIRECTORIES=str(tmp_path),
+        GIT_AUTHOR_NAME="Test",
+        GIT_AUTHOR_EMAIL="test@example.com",
+        GIT_COMMITTER_NAME="Test",
+        GIT_COMMITTER_EMAIL="test@example.com",
     )
     return env
 
@@ -49,9 +52,15 @@ def git(env, cwd, *args):
 def make_repo(env, path):
     path.mkdir(parents=True)
     git(env, path, "init", "-q")
-    git(env, path, "config", "user.name", "Test")
-    git(env, path, "config", "user.email", "test@example.com")
     return path.resolve()
+
+
+@pytest.fixture
+def repo(tmp_path, env):
+    """A Git repository with an initialized repository list."""
+    root = make_repo(env, tmp_path / "repo")
+    assert todo(env, root, "--init").returncode == 0
+    return root
 
 
 def opened(env, cwd, title):
@@ -61,7 +70,7 @@ def opened(env, cwd, title):
 
 
 def titles(path):
-    return [json.loads(line)["title"] for line in path.read_text().splitlines()]
+    return sorted(record.title for record in load(path))
 
 
 def test_check_1_init_from_subdirectory(tmp_path, env):
@@ -79,101 +88,82 @@ def test_check_1_init_from_subdirectory(tmp_path, env):
     assert titles(root / REPO_LIST) == ["Survives init"]
 
 
-def test_check_2_repository_personal_and_todo_file(tmp_path, env):
-    root = make_repo(env, tmp_path / "repo")
+def test_check_2_repository_personal_and_todo_file(tmp_path, env, repo):
     outside = tmp_path / "outside"
     outside.mkdir()
     personal = tmp_path / "home" / PERSONAL_LIST
-    assert todo(env, root, "--init").returncode == 0
 
-    opened(env, root, "In the repository")
+    opened(env, repo, "In the repository")
     opened(env, outside, "Outside")
 
-    assert titles(root / REPO_LIST) == ["In the repository"]
+    assert titles(repo / REPO_LIST) == ["In the repository"]
     assert titles(personal) == ["Outside"]
-    assert "In the repository" in todo(env, root, "--list").stdout
-    assert "Outside" not in todo(env, root, "--list").stdout
-    assert "Outside" in todo(env, outside, "--list").stdout
-    assert "In the repository" not in todo(env, outside, "--list").stdout
+    in_repo = todo(env, repo, "--list").stdout
+    assert "In the repository" in in_repo
+    assert "Outside" not in in_repo
+    out_of_repo = todo(env, outside, "--list").stdout
+    assert "Outside" in out_of_repo
+    assert "In the repository" not in out_of_repo
 
     override = tmp_path / "override" / "todos.jsonl"
     env["TODO_FILE"] = str(override)
-    opened(env, root, "Override from the repository")
+    opened(env, repo, "Override from the repository")
     opened(env, outside, "Override from outside")
 
-    assert sorted(titles(override)) == [
+    assert titles(override) == [
         "Override from outside",
         "Override from the repository",
     ]
-    assert titles(root / REPO_LIST) == ["In the repository"]
+    assert titles(repo / REPO_LIST) == ["In the repository"]
     assert titles(personal) == ["Outside"]
-    listed = todo(env, root, "--list").stdout
+    listed = todo(env, repo, "--list").stdout
     assert "Override from outside" in listed
     assert "In the repository" not in listed
 
 
-def test_check_3_one_changed_line_and_clean_status(tmp_path, env):
-    root = make_repo(env, tmp_path / "repo")
-    assert todo(env, root, "--init").returncode == 0
-    ids = [opened(env, root, title) for title in ("First", "Second", "Third")]
-    git(env, root, "add", str(REPO_LIST))
-    git(env, root, "commit", "-q", "-m", "Add todos")
+def test_check_3_one_changed_line_and_clean_status(env, repo):
+    _, target, _ = [opened(env, repo, title) for title in ("First", "Second", "Third")]
+    git(env, repo, "add", str(REPO_LIST))
+    git(env, repo, "commit", "-q", "-m", "Add todos")
 
-    target = ids[1]
-    result = todo(env, root, "--update", target, "--title", "Second, edited")
+    result = todo(env, repo, "--update", target, "--title", "Second, edited")
 
     assert (result.returncode, result.stderr) == (0, "")
-    assert git(env, root, "diff", "--numstat") == f"1\t1\t{REPO_LIST}\n"
+    assert git(env, repo, "diff", "--numstat") == f"1\t1\t{REPO_LIST}\n"
     changed = [
-        line
-        for line in git(env, root, "diff", "--unified=0").splitlines()
+        line[1:]
+        for line in git(env, repo, "diff", "--unified=0").splitlines()
         if line[:1] in "+-" and not line.startswith(("+++", "---"))
     ]
-    assert [line[0] for line in changed] == ["-", "+"]
-    assert all(json.loads(line[1:])["id"] == target for line in changed)
-    assert git(env, root, "status", "--porcelain", "--untracked-files=all") == (
+    assert [json.loads(line)["id"] for line in changed] == [target, target]
+    assert git(env, repo, "status", "--porcelain", "--untracked-files=all") == (
         f" M {REPO_LIST}\n"
     )
 
 
+def with_conflict(a, b):
+    text = f"{a}<<<<<<< HEAD\n{b}=======\n{b}>>>>>>> other\n"
+    return text, "{data}:2: Git conflict marker"
+
+
+def with_duplicate(a, b):
+    return a + b + a, "{data}:3: duplicate id {dup} (first on line 1)"
+
+
+@pytest.mark.parametrize("corrupt", [with_conflict, with_duplicate])
 @pytest.mark.parametrize(
     "command", [["--list"], ["--update", "{id}", "--title", "New"]]
 )
-def test_check_4_conflict_markers(tmp_path, env, command):
-    root = make_repo(env, tmp_path / "repo")
-    assert todo(env, root, "--init").returncode == 0
-    ids = [opened(env, root, title) for title in ("First", "Second")]
-    data = root / REPO_LIST
-    lines = data.read_text().splitlines(keepends=True)
-    text = lines[0] + "<<<<<<< HEAD\n" + lines[1] + "=======\n" + lines[1]
-    text += ">>>>>>> other\n"
+def test_check_4_reports_lines_and_leaves_file(env, repo, corrupt, command):
+    ids = [opened(env, repo, title) for title in ("First", "Second")]
+    data = repo / REPO_LIST
+    a, b = data.read_text().splitlines(keepends=True)
+    text, expected = corrupt(a, b)
     data.write_text(text)
-    before = data.read_bytes()
 
-    result = todo(env, root, *(arg.format(id=ids[0]) for arg in command))
-
-    assert (result.returncode, result.stdout) == (1, "")
-    assert result.stderr == f"todo: error: {data}:2: Git conflict marker\n"
-    assert data.read_bytes() == before
-
-
-@pytest.mark.parametrize(
-    "command", [["--list"], ["--update", "{id}", "--title", "New"]]
-)
-def test_check_4_duplicate_ids(tmp_path, env, command):
-    root = make_repo(env, tmp_path / "repo")
-    assert todo(env, root, "--init").returncode == 0
-    ids = [opened(env, root, title) for title in ("First", "Second")]
-    data = root / REPO_LIST
-    lines = data.read_text().splitlines(keepends=True)
-    data.write_text(lines[0] + lines[1] + lines[0])
-    before = data.read_bytes()
-    dup = json.loads(lines[0])["id"]
-
-    result = todo(env, root, *(arg.format(id=ids[1]) for arg in command))
+    result = todo(env, repo, *(arg.format(id=ids[0]) for arg in command))
 
     assert (result.returncode, result.stdout) == (1, "")
-    assert result.stderr == (
-        f"todo: error: {data}:3: duplicate id {dup} (first on line 1)\n"
-    )
-    assert data.read_bytes() == before
+    message = expected.format(data=data, dup=json.loads(a)["id"])
+    assert result.stderr == f"todo: error: {message}\n"
+    assert data.read_bytes() == text.encode()
