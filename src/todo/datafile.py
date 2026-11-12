@@ -1,10 +1,12 @@
 """Choose the data file that a command uses."""
 
+import contextlib
 import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
+from todo.errors import TodoError
 from todo.gitrepo import exclude_locally, git_dir, git_toplevel
 from todo.store import TMP_PREFIX, TMP_SUFFIX, Todo, mutate
 
@@ -72,3 +74,26 @@ def mutate_resolved[T](
         tmp_prefix=tmp_prefix,
         new_mode=None,
     )
+
+
+def init_repo_list(cwd: Path | None = None) -> Path:
+    """Create or validate the repository list of cwd and return its path.
+
+    It ignores TODO_FILE. A missing list is created empty under the repository
+    lock. An existing list is validated and left unchanged.
+    """
+    cwd = Path.cwd() if cwd is None else Path(cwd)
+    root = git_toplevel(cwd)
+    if root is None:
+        raise TodoError("todo --init needs a Git working tree")
+    path = root / REPO_LIST
+
+    def create_if_missing(records: list[Todo]) -> tuple[list[Todo], None]:
+        # load treats a missing file as an empty list, and mutate writes
+        # nothing when the records do not change, so create the file here.
+        with contextlib.suppress(FileExistsError):
+            path.touch(exist_ok=False)
+        return records, None
+
+    mutate_resolved(Resolved(path, root), create_if_missing)
+    return path

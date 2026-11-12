@@ -4,7 +4,7 @@ import argparse
 import sys
 from datetime import date
 
-from todo.datafile import mutate_resolved, resolve_data_file
+from todo.datafile import init_repo_list, mutate_resolved, resolve_data_file
 from todo.errors import TodoError
 from todo.ids import new_id
 from todo.store import Note, Todo, is_date, utc_now
@@ -165,8 +165,14 @@ def open_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_init(args: argparse.Namespace) -> int:
+    print(init_repo_list())
+    return 0
+
+
 HANDLERS = {action: not_implemented(action) for action in (*ACTIONS, "note")}
 HANDLERS["open"] = open_todo
+HANDLERS["init"] = handle_init
 
 
 def main(argv: list[str] | None = None) -> int:
