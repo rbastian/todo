@@ -2,8 +2,12 @@
 
 import argparse
 import sys
+from datetime import date
 
+from todo.datafile import mutate_resolved, resolve_data_file
 from todo.errors import TodoError
+from todo.ids import new_id
+from todo.store import Note, Todo, is_date, utc_now
 
 EXAMPLES = """\
 examples:
@@ -111,7 +115,58 @@ def not_implemented(action: str):
     return handler
 
 
+def parse_due(text: str, today: date) -> str:
+    """Return a due date as YYYY-MM-DD, or raise a CLI input error (exit 2)."""
+    if text == "today":
+        return today.isoformat()
+    if is_date(text):
+        return text
+    raise TodoError(f"invalid date '{text}', use YYYY-MM-DD or today", exit_code=2)
+
+
+def parse_title(text: str) -> str:
+    """Return the stripped title, or raise a CLI input error (exit 2)."""
+    title = text.strip()
+    if not title:
+        raise TodoError("title must not be blank", exit_code=2)
+    if "\n" in title or "\r" in title:
+        raise TodoError("title must not contain a line break", exit_code=2)
+    return title
+
+
+def parse_note(text: str) -> str:
+    """Return the note text as typed, or raise a CLI input error (exit 2)."""
+    if not text.strip():
+        raise TodoError("note must not be blank", exit_code=2)
+    return text
+
+
+def open_todo(args: argparse.Namespace) -> int:
+    title = parse_title(args.open)
+    due_date = None if args.due is None else parse_due(args.due, date.today())
+    note = None if args.note is None else parse_note(args.note[0])
+
+    def change(records: list[Todo]) -> tuple[list[Todo], str]:
+        now = utc_now()
+        todo = Todo(
+            id=new_id(record.id for record in records),
+            title=title,
+            priority=args.priority or "normal",
+            due_date=due_date,
+            status="open",
+            notes=[] if note is None else [Note(created_at=now, text=note)],
+            created_at=now,
+            updated_at=now,
+            completed_at=None,
+        )
+        return [*records, todo], todo.id
+
+    print(mutate_resolved(resolve_data_file(), change))
+    return 0
+
+
 HANDLERS = {action: not_implemented(action) for action in (*ACTIONS, "note")}
+HANDLERS["open"] = open_todo
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,3 +178,8 @@ def main(argv: list[str] | None = None) -> int:
     except TodoError as error:
         print(f"todo: error: {error}", file=sys.stderr)
         return error.exit_code
+    except OSError as error:
+        # Any OS error, for example a storage failure: no traceback, exit 1.
+        where = f"{error.filename}: " if error.filename else ""
+        print(f"todo: error: {where}{error.strerror or error}", file=sys.stderr)
+        return 1
