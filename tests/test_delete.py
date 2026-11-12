@@ -1,8 +1,10 @@
+from dataclasses import replace
+
 import pytest
 
 from todo import ids
 from todo.cli import main
-from todo.store import load
+from todo.store import dumps, load
 
 
 @pytest.fixture
@@ -48,11 +50,9 @@ def test_show_of_deleted_id_exits_1(capsys, data_file):
 
 def test_delete_done_todo(capsys, data_file):
     todo_id = open_todo(capsys, "Done already")
-    text = data_file.read_text().replace('"status":"open"', '"status":"done"')
-    text = text.replace(
-        '"completed_at":null', '"completed_at":"2026-11-12T14:00:00Z"'
-    )
-    data_file.write_text(text)
+    [todo] = load(data_file)
+    done = replace(todo, status="done", completed_at="2026-11-12T14:00:00Z")
+    data_file.write_text(dumps([done]))
     assert load(data_file)[0].status == "done"
 
     assert run(capsys, "--delete", todo_id) == (0, todo_id + "\n", "")
