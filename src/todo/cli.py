@@ -3,6 +3,8 @@
 import argparse
 import sys
 
+from todo.errors import TodoError
+
 EXAMPLES = """\
 examples:
   todo --init
@@ -30,14 +32,6 @@ MODIFIERS = {
     "title": {"update"},
     "all": {"list"},
 }
-
-
-class TodoError(Exception):
-    """An error that is not a CLI input error. main prints it and exits."""
-
-    def __init__(self, message: str, exit_code: int = 1) -> None:
-        super().__init__(message)
-        self.exit_code = exit_code
 
 
 def build_parser() -> argparse.ArgumentParser:
