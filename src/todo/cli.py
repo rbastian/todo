@@ -296,6 +296,24 @@ def note_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def done_todo(args: argparse.Namespace) -> int:
+    todo_id = normalize_id(args.done)
+
+    def change(records: list[Todo]) -> tuple[list[Todo], str]:
+        todo = next((record for record in records if record.id == todo_id), None)
+        if todo is None:
+            raise TodoError(f"no todo with ID '{todo_id}'")
+        if todo.status == "done":
+            # Repeated completion keeps the original timestamps: no write.
+            return records, todo_id
+        now = utc_now()
+        done = replace(todo, status="done", completed_at=now, updated_at=now)
+        return [done if record is todo else record for record in records], todo_id
+
+    print(mutate_resolved(resolve_data_file(), change))
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -309,6 +327,7 @@ HANDLERS["today"] = list_today
 HANDLERS["show"] = show_todo
 HANDLERS["update"] = update_todo
 HANDLERS["note"] = note_todo
+HANDLERS["done"] = done_todo
 
 
 def main(argv: list[str] | None = None) -> int:
