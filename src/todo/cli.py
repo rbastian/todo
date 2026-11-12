@@ -3,6 +3,7 @@
 import argparse
 import sys
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date
 
 from todo import store
@@ -244,6 +245,37 @@ def show_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def update_todo(args: argparse.Namespace) -> int:
+    todo_id = normalize_id(args.update)
+    changes = {}
+    if args.title is not None:
+        changes["title"] = parse_title(args.title)
+    if args.priority is not None:
+        changes["priority"] = args.priority
+    if args.due is not None:
+        changes["due_date"] = parse_due(args.due, date.today())
+    if args.clear_due:
+        changes["due_date"] = None
+    if not changes:
+        raise TodoError(
+            "--update needs --title, --priority, --due or --clear-due", exit_code=2
+        )
+
+    def change(records: list[Todo]) -> tuple[list[Todo], str]:
+        todo = next((record for record in records if record.id == todo_id), None)
+        if todo is None:
+            raise TodoError(f"todo {todo_id} not found")
+        if todo.status != "open":
+            raise TodoError(f"todo {todo_id} is done; only open todos can be updated")
+        if all(getattr(todo, name) == value for name, value in changes.items()):
+            return records, todo_id
+        updated = replace(todo, **changes, updated_at=utc_now())
+        return [updated if r is todo else r for r in records], todo_id
+
+    print(mutate_resolved(resolve_data_file(), change))
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -255,6 +287,7 @@ HANDLERS["init"] = handle_init
 HANDLERS["list"] = list_todos
 HANDLERS["today"] = list_today
 HANDLERS["show"] = show_todo
+HANDLERS["update"] = update_todo
 
 
 def main(argv: list[str] | None = None) -> int:
