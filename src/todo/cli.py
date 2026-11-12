@@ -222,21 +222,26 @@ def format_todo(todo: Todo) -> str:
     lines = [f"{label + ':':<11}{value}" for label, value in fields]
     if not todo.notes:
         lines.append(f"{'notes:':<11}-")
-        return "\n".join(lines)
-    lines.append("notes:")
-    for note in todo.notes:
-        lines.append(f"  {note.created_at}")
-        lines.extend(f"    {line}" for line in note.text.split("\n"))
+    else:
+        lines.append("notes:")
+        for note in todo.notes:
+            lines.append(f"  {note.created_at}")
+            lines.extend(f"    {line}" for line in note.text.split("\n"))
     return "\n".join(lines)
+
+
+def find_todo(records: list[Todo], todo_id: str) -> Todo:
+    """Return the todo with this ID, or raise a missing-ID error (exit 1)."""
+    for todo in records:
+        if todo.id == todo_id:
+            return todo
+    raise TodoError(f"no todo with ID '{todo_id}'")
 
 
 def show_todo(args: argparse.Namespace) -> int:
     todo_id = normalize_id(args.show)
-    for todo in load(resolve_data_file().path):
-        if todo.id == todo_id:
-            print(format_todo(todo))
-            return 0
-    raise TodoError(f"no todo with ID '{todo_id}'")
+    print(format_todo(find_todo(load(resolve_data_file().path), todo_id)))
+    return 0
 
 
 def handle_init(args: argparse.Namespace) -> int:
