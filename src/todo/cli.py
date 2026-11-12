@@ -276,6 +276,26 @@ def update_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def note_todo(args: argparse.Namespace) -> int:
+    todo_id = normalize_id(args.note[0])
+    text = parse_note(args.note[1])
+
+    def change(records: list[Todo]) -> tuple[list[Todo], str]:
+        now = utc_now()
+        for index, record in enumerate(records):
+            if record.id == todo_id:
+                updated = replace(
+                    record,
+                    notes=[*record.notes, Note(created_at=now, text=text)],
+                    updated_at=now,
+                )
+                return [*records[:index], updated, *records[index + 1 :]], todo_id
+        raise TodoError(f"no todo with ID '{todo_id}'")
+
+    print(mutate_resolved(resolve_data_file(), change))
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -288,6 +308,7 @@ HANDLERS["list"] = list_todos
 HANDLERS["today"] = list_today
 HANDLERS["show"] = show_todo
 HANDLERS["update"] = update_todo
+HANDLERS["note"] = note_todo
 
 
 def main(argv: list[str] | None = None) -> int:
