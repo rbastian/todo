@@ -1,8 +1,13 @@
 """The todo record, its JSONL serialization and the validated load."""
 
+import fcntl
 import json
 import os
 import re
+import stat
+import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields
 from datetime import UTC, date, datetime
 
@@ -16,6 +21,9 @@ CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
 ID_RE = re.compile(r"[0-9a-z]{4}")
 DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+
+LOCK_TIMEOUT = 10.0
+LOCK_RETRY = 0.05
 
 
 @dataclass
@@ -192,3 +200,89 @@ def _to_todo(obj: object) -> Todo:
         _check_timestamp(obj["completed_at"], "completed_at")
 
     return Todo(**{**obj, "notes": notes})
+
+
+def mutate[T](
+    path: str | os.PathLike,
+    change: Callable[[list[Todo]], tuple[list[Todo], T]],
+    *,
+    lock_path: str | os.PathLike | None = None,
+    tmp_dir: str | os.PathLike | None = None,
+    new_mode: int | None = 0o600,
+) -> T:
+    """Apply change to the records under the lock and replace the file atomically.
+
+    change takes the loaded records and returns (new_records, result). mutate
+    returns result. If the new records equal the old ones, the file is not
+    written. A new data file gets new_mode, or the umask default if it is None.
+    """
+    path = os.path.realpath(path)
+    directory = os.path.dirname(path)
+    lock_path = lock_path if lock_path is not None else path + ".lock"
+    tmp_dir = tmp_dir if tmp_dir is not None else directory
+    for needed in {directory, os.path.dirname(lock_path), tmp_dir}:
+        os.makedirs(needed, exist_ok=True)
+
+    lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        _lock(lock_fd, path)
+        records = load(path)
+        new_records, result = change(records)
+        if new_records != records:
+            _replace(path, dumps(new_records), tmp_dir, new_mode)
+        return result
+    finally:
+        os.close(lock_fd)
+
+
+def _lock(fd: int, path: str) -> None:
+    deadline = time.monotonic() + LOCK_TIMEOUT
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TodoError(f"timed out waiting for the lock on {path}") from None
+            time.sleep(LOCK_RETRY)
+
+
+def _before_replace(tmp_name: str) -> None:
+    """Run between the temporary write and the replace. Tests patch it to fail."""
+
+
+def _replace(path: str, text: str, tmp_dir: str | os.PathLike, new_mode) -> None:
+    fd, tmp_name = tempfile.mkstemp(dir=tmp_dir, prefix=".todos.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as file:
+            file.write(text.encode("utf-8"))
+            file.flush()
+            os.fsync(file.fileno())
+        try:
+            mode = stat.S_IMODE(os.stat(path).st_mode)
+        except FileNotFoundError:
+            mode = new_mode if new_mode is not None else 0o666 & ~_umask()
+        os.chmod(tmp_name, mode)
+        _before_replace(tmp_name)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
+    _fsync_dir(os.path.dirname(path))
+
+
+def _umask() -> int:
+    mask = os.umask(0)
+    os.umask(mask)
+    return mask
+
+
+def _fsync_dir(directory: str) -> None:
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
