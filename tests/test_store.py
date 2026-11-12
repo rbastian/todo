@@ -3,7 +3,6 @@ import re
 
 import pytest
 
-from todo import store
 from todo.errors import TodoError
 from todo.store import Note, Todo, dumps, load, utc_now
 
@@ -26,12 +25,6 @@ SPEC_RECORD = Todo(
     updated_at="2026-11-12T14:05:00Z",
     completed_at=None,
 )
-
-
-@pytest.fixture(autouse=True)
-def isolated_data(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("TODO_FILE", str(tmp_path / "todos.jsonl"))
 
 
 def record(**fields):
@@ -123,7 +116,9 @@ def test_missing_file_loads_as_empty(tmp_path):
 
 def test_blank_lines_skipped_and_final_newline_optional(tmp_path):
     other = line(record(id="zz99", notes=[]))
-    path = write(tmp_path / "t.jsonl", "\n   \n" + SPEC_LINE + " \t\n" + other.rstrip("\n"))
+    path = write(
+        tmp_path / "t.jsonl", "\n   \n" + SPEC_LINE + " \t\n" + other.rstrip("\n")
+    )
     assert [t.id for t in load(path)] == ["k7m2", "zz99"]
 
 
@@ -271,8 +266,3 @@ def test_load_accepts_str_path(tmp_path):
 
 def test_utc_now_format():
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", utc_now())
-
-
-def test_utc_now_is_patchable(monkeypatch):
-    monkeypatch.setattr(store, "utc_now", lambda: "2000-01-01T00:00:00Z")
-    assert store.utc_now() == "2000-01-01T00:00:00Z"

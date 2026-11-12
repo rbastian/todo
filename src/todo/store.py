@@ -95,18 +95,14 @@ def _parse_line(raw: str) -> Todo:
     if raw.startswith(CONFLICT_MARKERS):
         raise ValueError("Git conflict marker")
     try:
-        obj = json.loads(raw, object_pairs_hook=_unique_keys)
+        return _to_todo(json.loads(raw, object_pairs_hook=_unique_keys))
     except json.JSONDecodeError as error:
         raise ValueError(f"malformed JSON: {error.msg}") from error
-    except _DuplicateKey as error:
-        raise ValueError(f"invalid record: duplicate key {error}") from error
-    try:
-        return _to_todo(obj)
-    except ValueError as error:
+    except _InvalidRecord as error:
         raise ValueError(f"invalid record: {error}") from error
 
 
-class _DuplicateKey(Exception):
+class _InvalidRecord(Exception):
     pass
 
 
@@ -114,27 +110,36 @@ def _unique_keys(pairs: list[tuple[str, object]]) -> dict:
     obj = {}
     for key, value in pairs:
         if key in obj:
-            raise _DuplicateKey(repr(key))
+            raise _InvalidRecord(f"duplicate key {key!r}")
         obj[key] = value
     return obj
 
 
-def _check_keys(obj: object, keys: list[str], what: str) -> dict:
+def _check_keys(obj: object, keys: list[str], what: str) -> None:
     if not isinstance(obj, dict):
-        raise ValueError(f"{what} is not a JSON object")
-    missing = [key for key in keys if key not in obj]
-    if missing:
-        raise ValueError(f"{what} is missing key {missing[0]!r}")
-    unknown = [key for key in obj if key not in keys]
-    if unknown:
-        raise ValueError(f"{what} has unknown key {unknown[0]!r}")
-    return obj
+        raise _InvalidRecord(f"{what} is not a JSON object")
+    missing = next((key for key in keys if key not in obj), None)
+    if missing is not None:
+        raise _InvalidRecord(f"{what} is missing key {missing!r}")
+    unknown = next((key for key in obj if key not in keys), None)
+    if unknown is not None:
+        raise _InvalidRecord(f"{what} has unknown key {unknown!r}")
 
 
 def _check_text(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a nonblank string")
+        raise _InvalidRecord(f"{name} must be a nonblank string")
     return value
+
+
+def _check_date(value: object, name: str) -> None:
+    if isinstance(value, str) and DATE_RE.fullmatch(value):
+        try:
+            date.fromisoformat(value)
+            return
+        except ValueError:
+            pass
+    raise _InvalidRecord(f"{name} must be null or a date YYYY-MM-DD")
 
 
 def _check_timestamp(value: object, name: str) -> str:
@@ -144,39 +149,33 @@ def _check_timestamp(value: object, name: str) -> str:
             return value
         except ValueError:
             pass
-    raise ValueError(f"{name} must be a UTC timestamp YYYY-MM-DDTHH:MM:SSZ")
+    raise _InvalidRecord(f"{name} must be a UTC timestamp YYYY-MM-DDTHH:MM:SSZ")
 
 
 def _to_todo(obj: object) -> Todo:
-    obj = _check_keys(obj, TODO_KEYS, "record")
+    _check_keys(obj, TODO_KEYS, "record")
 
     if not isinstance(obj["id"], str) or not ID_RE.fullmatch(obj["id"]):
-        raise ValueError("id must be four characters from 0-9a-z")
+        raise _InvalidRecord("id must be four characters from 0-9a-z")
 
     title = _check_text(obj["title"], "title")
     if "\n" in title or "\r" in title:
-        raise ValueError("title must not contain a line break")
+        raise _InvalidRecord("title must not contain a line break")
 
     if obj["priority"] not in PRIORITIES:
-        raise ValueError("priority must be high, normal or low")
+        raise _InvalidRecord("priority must be high, normal or low")
 
-    due_date = obj["due_date"]
-    if due_date is not None:
-        try:
-            if not (isinstance(due_date, str) and DATE_RE.fullmatch(due_date)):
-                raise ValueError
-            date.fromisoformat(due_date)
-        except ValueError:
-            raise ValueError("due_date must be null or a date YYYY-MM-DD") from None
+    if obj["due_date"] is not None:
+        _check_date(obj["due_date"], "due_date")
 
     if obj["status"] not in STATUSES:
-        raise ValueError("status must be open or done")
+        raise _InvalidRecord("status must be open or done")
 
     if not isinstance(obj["notes"], list):
-        raise ValueError("notes must be a list")
+        raise _InvalidRecord("notes must be a list")
     notes = []
     for note in obj["notes"]:
-        note = _check_keys(note, NOTE_KEYS, "note")
+        _check_keys(note, NOTE_KEYS, "note")
         notes.append(
             Note(
                 created_at=_check_timestamp(note["created_at"], "note created_at"),
@@ -188,7 +187,7 @@ def _to_todo(obj: object) -> Todo:
     _check_timestamp(obj["updated_at"], "updated_at")
     if obj["status"] == "open":
         if obj["completed_at"] is not None:
-            raise ValueError("completed_at must be null when status is open")
+            raise _InvalidRecord("completed_at must be null when status is open")
     else:
         _check_timestamp(obj["completed_at"], "completed_at")
 
