@@ -1,13 +1,14 @@
 """Todo ID allocation and normalization."""
 
+import re
 import secrets
 from collections.abc import Iterable
 
 from todo.errors import TodoError
-from todo.store import ID_RE
 
 ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
 ID_LENGTH = 4
+ID_RE = re.compile(f"[0-9a-z]{{{ID_LENGTH}}}")
 
 
 def _candidate() -> str:

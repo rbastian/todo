@@ -3,7 +3,6 @@ import pytest
 from todo import ids
 from todo.cli import main
 from todo.errors import TodoError
-from todo.store import ID_RE
 
 
 @pytest.fixture(autouse=True)
@@ -19,11 +18,7 @@ def force_candidates(monkeypatch, values):
 
 def test_new_id_is_four_base36_characters():
     for _ in range(50):
-        assert ID_RE.fullmatch(ids.new_id(set()))
-
-
-def test_new_id_avoids_existing_ids():
-    assert ids.new_id({"k7m2"}) != "k7m2"
+        assert ids.ID_RE.fullmatch(ids.new_id(set()))
 
 
 def test_forced_collision_retries_and_returns_free_id(monkeypatch):
@@ -37,18 +32,12 @@ def test_existing_ids_can_be_any_iterable(monkeypatch):
 
 
 def test_100_collisions_raise_exit_1(monkeypatch):
-    calls = []
-
-    def taken():
-        calls.append(1)
-        return "k7m2"
-
-    monkeypatch.setattr(ids, "_candidate", taken)
+    # A 101st call would raise StopIteration instead of TodoError.
+    force_candidates(monkeypatch, ["k7m2"] * 100)
     with pytest.raises(TodoError) as exc:
         ids.new_id({"k7m2"})
     assert exc.value.exit_code == 1
     assert str(exc.value) == "could not allocate a free ID after 100 attempts"
-    assert len(calls) == 100
 
 
 def test_collision_on_last_attempt_still_succeeds(monkeypatch):

@@ -7,13 +7,13 @@ from dataclasses import asdict, dataclass, fields
 from datetime import UTC, date, datetime
 
 from todo.errors import TodoError
+from todo.ids import ID_RE
 
 PRIORITIES = ("high", "normal", "low")
 STATUSES = ("open", "done")
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
 
-ID_RE = re.compile(r"[0-9a-z]{4}")
 DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
