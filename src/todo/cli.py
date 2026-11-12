@@ -314,6 +314,19 @@ def done_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def delete_todo(args: argparse.Namespace) -> int:
+    todo_id = normalize_id(args.delete)
+
+    def change(records: list[Todo]) -> tuple[list[Todo], str]:
+        kept = [record for record in records if record.id != todo_id]
+        if len(kept) == len(records):
+            raise TodoError(f"no todo with ID '{todo_id}'")
+        return kept, todo_id
+
+    print(mutate_resolved(resolve_data_file(), change))
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -328,6 +341,7 @@ HANDLERS["show"] = show_todo
 HANDLERS["update"] = update_todo
 HANDLERS["note"] = note_todo
 HANDLERS["done"] = done_todo
+HANDLERS["delete"] = delete_todo
 
 
 def main(argv: list[str] | None = None) -> int:

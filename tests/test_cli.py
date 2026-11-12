@@ -43,19 +43,6 @@ def test_todo_error_defaults_to_exit_1():
 
 
 @pytest.mark.parametrize(
-    ("argv", "action"),
-    [
-        (["--delete", "k7m2"], "--delete"),
-    ],
-)
-def test_actions_dispatch_to_their_handler(capsys, argv, action):
-    code, out, err = run(capsys, *argv)
-    assert code == 1
-    assert out == ""
-    assert err == f"todo: error: {action} is not implemented yet\n"
-
-
-@pytest.mark.parametrize(
     "argv",
     [
         ["--list", "--today"],
