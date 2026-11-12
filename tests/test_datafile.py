@@ -19,6 +19,13 @@ def personal(home):
     return home / ".local" / "share" / "todo" / "todos.jsonl"
 
 
+@pytest.fixture
+def outside(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    return outside
+
+
 def git_init(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q", str(path)], check=True)
@@ -51,9 +58,7 @@ def test_todo_file_is_not_created(tmp_path, home):
     assert not target.exists()
 
 
-def test_empty_todo_file_counts_as_unset(tmp_path, home, personal):
-    outside = tmp_path / "outside"
-    outside.mkdir()
+def test_empty_todo_file_counts_as_unset(home, personal, outside):
     result = resolve_data_file(cwd=outside, env={"TODO_FILE": ""})
     assert result == Resolved(path=personal, repo_root=None)
 
@@ -80,9 +85,7 @@ def test_repository_without_list_uses_personal(tmp_path, home, personal):
     assert result == Resolved(path=personal, repo_root=None)
 
 
-def test_outside_repository_uses_personal(tmp_path, home, personal):
-    outside = tmp_path / "outside"
-    outside.mkdir()
+def test_outside_repository_uses_personal(home, personal, outside):
     result = resolve_data_file(cwd=outside, env={})
     assert result == Resolved(path=personal, repo_root=None)
 
@@ -106,9 +109,7 @@ def test_git_missing_uses_personal(tmp_path, home, personal, monkeypatch):
     assert result == Resolved(path=personal, repo_root=None)
 
 
-def test_personal_list_is_not_created(tmp_path, home, personal):
-    outside = tmp_path / "outside"
-    outside.mkdir()
+def test_personal_list_is_not_created(home, personal, outside):
     resolve_data_file(cwd=outside, env={})
     assert not personal.exists()
     assert not personal.parent.exists()
