@@ -163,5 +163,5 @@ def test_init_when_todo_dir_is_a_file_exits_1(tmp_path, capsys, monkeypatch):
     code, out, err = init(capsys, monkeypatch, root)
 
     assert (code, out) == (1, "")
-    assert err.startswith(f"todo: error: {root / '.todo'}: ")
+    assert err.startswith(f"todo: error: cannot write {root / REPO_LIST}: ")
     assert (root / ".todo").read_text() == "not a directory"

@@ -53,14 +53,14 @@ def mutate_resolved[T](
     A repository list keeps its lock and temporary file in the worktree's Git
     metadata directory, so that they stay out of Git status. If that directory
     is on another filesystem, the temporary file goes in .todo/ and is
-    excluded through info/exclude. An OSError becomes a TodoError, so that a
-    storage failure exits 1 with an error message.
+    excluded through info/exclude. An OSError becomes a TodoError that names
+    the data file, so that a storage failure exits 1 with an error message.
     """
     try:
         return _mutate_resolved(resolved, change, create)
     except OSError as error:
-        where = error.filename or resolved.path
-        raise TodoError(f"{where}: {error.strerror or error}") from error
+        message = f"cannot write {resolved.path}: {error.strerror or error}"
+        raise TodoError(message) from error
 
 
 def _mutate_resolved[T](

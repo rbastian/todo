@@ -124,3 +124,18 @@ def test_module_help_in_subprocess(tmp_path):
     assert result.returncode == 0
     assert result.stdout.startswith("usage: todo")
     assert "todo --done k7m2" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "argv", [["--init"], ["--list"], ["--open", "Title"]], ids=lambda a: a[0]
+)
+def test_deleted_working_directory_exits_1(capsys, tmp_path, monkeypatch, argv):
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    monkeypatch.chdir(gone)
+    gone.rmdir()
+
+    code, out, err = run(capsys, *argv)
+
+    assert (code, out) == (1, "")
+    assert err.startswith("todo: error: ")
