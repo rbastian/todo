@@ -1,7 +1,7 @@
 import pytest
 
 from todo.cli import main
-from todo.store import TIMESTAMP_RE, load
+from todo.store import load
 
 
 @pytest.fixture
@@ -41,7 +41,6 @@ def test_done_completes_open_todo(capsys, data_file, monkeypatch):
     assert after.status == "done"
     assert after.completed_at == "2030-01-02T03:04:05Z"
     assert after.updated_at == after.completed_at
-    assert TIMESTAMP_RE.fullmatch(after.completed_at)
     assert after.notes == before.notes
     assert after.title == before.title
     assert after.created_at == before.created_at
