@@ -47,7 +47,6 @@ def test_todo_error_defaults_to_exit_1():
     [
         ([], "--list"),
         (["--all"], "--list"),
-        (["--init"], "--init"),
         (["--list"], "--list"),
         (["--list", "--all"], "--list"),
         (["--today"], "--today"),

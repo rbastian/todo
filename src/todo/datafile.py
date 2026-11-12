@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
+from todo.errors import TodoError
 from todo.gitrepo import exclude_locally, git_dir, git_toplevel
 from todo.store import TMP_PREFIX, TMP_SUFFIX, Todo, mutate
 
@@ -43,17 +44,32 @@ def same_filesystem(a: Path, b: Path) -> bool:
 
 
 def mutate_resolved[T](
-    resolved: Resolved, change: Callable[[list[Todo]], tuple[list[Todo], T]]
+    resolved: Resolved,
+    change: Callable[[list[Todo]], tuple[list[Todo], T]],
+    create: bool = False,
 ) -> T:
     """Run mutate on a resolved data file with the lock and temporary file placement.
 
     A repository list keeps its lock and temporary file in the worktree's Git
     metadata directory, so that they stay out of Git status. If that directory
     is on another filesystem, the temporary file goes in .todo/ and is
-    excluded through info/exclude.
+    excluded through info/exclude. An OSError becomes a TodoError, so that a
+    storage failure exits 1 with an error message.
     """
+    try:
+        return _mutate_resolved(resolved, change, create)
+    except OSError as error:
+        where = error.filename or resolved.path
+        raise TodoError(f"{where}: {error.strerror or error}") from error
+
+
+def _mutate_resolved[T](
+    resolved: Resolved,
+    change: Callable[[list[Todo]], tuple[list[Todo], T]],
+    create: bool,
+) -> T:
     if resolved.repo_root is None:
-        return mutate(resolved.path, change)
+        return mutate(resolved.path, change, create=create)
 
     meta = git_dir(resolved.repo_root)
     list_dir = resolved.path.parent
@@ -71,4 +87,20 @@ def mutate_resolved[T](
         tmp_dir=tmp_dir,
         tmp_prefix=tmp_prefix,
         new_mode=None,
+        create=create,
     )
+
+
+def init_repo_list(cwd: Path | None = None) -> Path:
+    """Create or validate the repository list of cwd and return its path.
+
+    It ignores TODO_FILE. A missing list is created empty under the repository
+    lock. An existing list is validated and left unchanged.
+    """
+    cwd = Path.cwd() if cwd is None else Path(cwd)
+    root = git_toplevel(cwd)
+    if root is None:
+        raise TodoError("todo --init needs a Git working tree")
+    path = root / REPO_LIST
+    mutate_resolved(Resolved(path, root), lambda records: (records, None), create=True)
+    return path
