@@ -154,3 +154,15 @@ def test_init_keeps_lock_and_temp_files_out_of_git_status(
 
     assert (gitrepo.git_dir(root) / "todo.lock").exists()
     assert sorted(p.name for p in (root / ".todo").iterdir()) == ["todos.jsonl"]
+
+
+def test_init_when_todo_dir_is_a_file_exits_1(tmp_path, capsys, monkeypatch):
+    root = git_init(tmp_path / "repo")
+    (root / ".todo").write_text("not a directory")
+
+    code, out, err = init(capsys, monkeypatch, root)
+
+    assert (code, out) == (1, "")
+    assert err.startswith(f"todo: error: {root / '.todo'}: ")
+    assert err.endswith("\n") and "Traceback" not in err
+    assert (root / ".todo").read_text() == "not a directory"
