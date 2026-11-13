@@ -186,6 +186,7 @@ def test_check_9_personal_list_under_home(tmp_path, env):
     opened(env, outside, "X")
 
     assert titles(home / ".todo" / "todos.jsonl") == ["X"]
-    assert "X" in todo(env, outside, "--list").stdout
-    assert "Old" not in todo(env, outside, "--list").stdout
+    listed = todo(env, outside, "--list").stdout
+    assert "X" in listed
+    assert "Old" not in listed
     assert old.read_bytes() == before
