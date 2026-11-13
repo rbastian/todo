@@ -16,9 +16,14 @@ def expected_version() -> str:
     return f"todo {major}.{minor}\n"
 
 
-def test_version_prints_major_minor(capsys):
-    code = main(["--version"])
+def run(capsys, *argv):
+    code = main(list(argv))
     out, err = capsys.readouterr()
+    return code, out, err
+
+
+def test_version_prints_major_minor(capsys):
+    code, out, err = run(capsys, "--version")
     assert code == 0
     assert out == expected_version()
     assert err == ""
@@ -39,16 +44,17 @@ def test_version_with_other_arguments_exits_2(capsys, argv):
     with pytest.raises(SystemExit) as exc:
         main(argv)
     assert exc.value.code == 2
-    out, _ = capsys.readouterr()
+    out, err = capsys.readouterr()
     assert out == ""
+    assert "usage:" in err
+    assert "todo: error:" in err
 
 
 def test_version_ignores_malformed_data_file(tmp_path, monkeypatch, capsys):
     data = tmp_path / "bad.jsonl"
     data.write_bytes(b"not json\n")
     monkeypatch.setenv("TODO_FILE", str(data))
-    code = main(["--version"])
-    out, err = capsys.readouterr()
+    code, out, err = run(capsys, "--version")
     assert code == 0
     assert out == expected_version()
     assert err == ""

@@ -1,7 +1,6 @@
 """The argparse command line for todo."""
 
 import argparse
-import importlib.metadata
 import sys
 from collections.abc import Callable
 from dataclasses import replace
@@ -343,6 +342,9 @@ def delete_todo(args: argparse.Namespace) -> int:
 
 
 def print_version(args: argparse.Namespace) -> int:
+    # Import here: importlib.metadata is slow to load, and only --version uses it.
+    import importlib.metadata
+
     major, minor = importlib.metadata.version("todo").split(".")[:2]
     print(f"todo {major}.{minor}")
     return 0
