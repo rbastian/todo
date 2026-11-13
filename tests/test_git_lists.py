@@ -167,3 +167,26 @@ def test_check_4_reports_lines_and_leaves_file(env, repo, corrupt, command):
     message = expected.format(data=data, dup=json.loads(a)["id"])
     assert result.stderr == f"todo: error: {message}\n"
     assert data.read_bytes() == text.encode()
+
+
+def test_check_9_personal_list_under_home(tmp_path, env):
+    home = tmp_path / "home"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    old = home / ".local" / "share" / "todo" / "todos.jsonl"
+    old.parent.mkdir(parents=True)
+    old.write_text('{"id":"aaaa","title":"Old"}\n')
+    before = old.read_bytes()
+
+    listed = todo(env, outside, "--list")
+
+    assert (listed.returncode, listed.stdout, listed.stderr) == (0, "", "")
+    assert not (home / ".todo").exists()
+
+    opened(env, outside, "X")
+
+    assert titles(home / ".todo" / "todos.jsonl") == ["X"]
+    listed = todo(env, outside, "--list").stdout
+    assert "X" in listed
+    assert "Old" not in listed
+    assert old.read_bytes() == before

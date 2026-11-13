@@ -10,7 +10,7 @@ from todo.gitrepo import exclude_locally, git_dir, git_toplevel
 from todo.store import TMP_PREFIX, TMP_SUFFIX, Todo, mutate
 
 REPO_LIST = Path(".todo") / "todos.jsonl"
-PERSONAL_LIST = Path(".local") / "share" / "todo" / "todos.jsonl"
+PERSONAL_LIST = Path(".todo") / "todos.jsonl"
 # The exclude pattern of the reserved temporary file name in .todo/.
 FALLBACK_EXCLUDE = f"{REPO_LIST.parent}/{TMP_PREFIX}*{TMP_SUFFIX}"
 
