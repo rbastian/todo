@@ -25,11 +25,22 @@ examples:
   todo --done k7m2
   todo --list --all
   todo --delete k7m2
+  todo --version
 """
 
 # The action flags in the mutually exclusive group. --note is also an action,
 # but it sits outside the group because it is a modifier of --open too.
-ACTIONS = ("init", "open", "list", "today", "show", "update", "done", "delete")
+ACTIONS = (
+    "init",
+    "open",
+    "list",
+    "today",
+    "show",
+    "update",
+    "done",
+    "delete",
+    "version",
+)
 
 # The actions that each modifier can go with, keyed by argparse dest.
 MODIFIERS = {
@@ -61,6 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_argument("--update", metavar="ID", help="set fields on an open todo")
     actions.add_argument("--done", metavar="ID", help="mark a todo complete")
     actions.add_argument("--delete", metavar="ID", help="permanently remove a todo")
+    actions.add_argument(
+        "--version", action="store_true", help="print the specification version"
+    )
     parser.add_argument(
         "--note",
         nargs="+",
@@ -327,6 +341,15 @@ def delete_todo(args: argparse.Namespace) -> int:
     return 0
 
 
+def print_version(args: argparse.Namespace) -> int:
+    # Import here: importlib.metadata is slow to load, and only --version uses it.
+    import importlib.metadata
+
+    major, minor = importlib.metadata.version("todo").split(".")[:2]
+    print(f"todo {major}.{minor}")
+    return 0
+
+
 def handle_init(args: argparse.Namespace) -> int:
     print(init_repo_list())
     return 0
@@ -342,6 +365,7 @@ HANDLERS["update"] = update_todo
 HANDLERS["note"] = note_todo
 HANDLERS["done"] = done_todo
 HANDLERS["delete"] = delete_todo
+HANDLERS["version"] = print_version
 
 
 def main(argv: list[str] | None = None) -> int:
