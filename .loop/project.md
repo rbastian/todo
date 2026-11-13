@@ -4,9 +4,9 @@ This section gives the facts about this project. The prompt above refers to it a
 
 ## What the project is
 
-`todo` is a Python command-line todo list for one person. It keeps a personal list at `~/.local/share/todo/todos.jsonl` and optional repository lists at `.todo/todos.jsonl` that the user shares through normal Git commits. The user captures, prioritizes, updates, completes and deletes todos with one action flag per command, for example `todo --open`, `todo --list` and `todo --done`. `Todo-CLI-Spec-v0.1.md` in the repository root is the specification. When a bead and the specification disagree, the specification wins, and the agent escalates to `$HUMAN`.
+`todo` is a Python command-line todo list for one person. It keeps a personal list at `~/.todo/todos.jsonl` and optional repository lists at `.todo/todos.jsonl` that the user shares through normal Git commits. The user captures, prioritizes, updates, completes and deletes todos with one action flag per command, for example `todo --open`, `todo --list` and `todo --done`. `Todo-CLI-Spec-v0.2.md` in the repository root is the specification. When a bead and the specification disagree, the specification wins, and the agent escalates to `$HUMAN`.
 
-The loop must not change `Todo-CLI-Spec-v0.1.md`. Only `$HUMAN` changes the specification. Tests must not write to the real personal list in `~/.local/share/todo/`: set `TODO_FILE` or `HOME` to a pytest temporary directory.
+The loop must not change `Todo-CLI-Spec-v0.2.md`. Only `$HUMAN` changes the specification. Tests must not write to the real personal list in `~/.todo/` or to the version 0.1 path `~/.local/share/todo/`: set `TODO_FILE` or `HOME` to a pytest temporary directory.
 
 ## Roles
 
@@ -93,7 +93,7 @@ None. The CLI reads the `TODO_FILE` environment variable, which overrides the da
 
 The reviewer always runs the default method for its engine. List here only the checks that add to it, chosen by the files that the branch changes.
 
-- For each change, compare the behavior with `Todo-CLI-Spec-v0.1.md`: exit codes (0, 1 and 2), stdout for results and stderr for errors, and the exact list sort order.
+- For each change, compare the behavior with `Todo-CLI-Spec-v0.2.md`: exit codes (0, 1 and 2), stdout for results and stderr for errors, and the exact list sort order.
 - For a storage change, make sure that every mutation holds the `fcntl.flock` lock through the atomic replace, flushes and syncs the temporary file, and leaves the data file untouched on any error.
 - For a storage change, make sure that records keep a fixed key order, sorted by ID, with a newline at the end of every record.
 - For a date or time change, make sure that timestamps are UTC ISO 8601 and that `today` and `--today` use the local calendar date.

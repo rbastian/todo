@@ -1,6 +1,13 @@
 # Python Todo CLI Specification
 
-Version 0.1
+Version 0.2
+
+### Changes from 0.1
+
+- The personal list moves to `~/.todo/todos.jsonl`.
+- `--due` also accepts `tomorrow`, weekday names and `next week`.
+- Words without an action flag create a todo, for example `todo Buy milk`.
+- `todo --version` prints the specification version.
 
 ## Scope
 
@@ -8,12 +15,13 @@ Build a Python CLI with a personal list and optional Git-tracked repository list
 
 ## Commands
 
-Use one action flag per invocation. `todo` alone is shorthand for `todo --list`.
+Use one action flag per invocation. `todo` alone is shorthand for `todo --list`. Words without an action flag are shorthand for `--open`, so `todo Renew club membership` is the same as `todo --open "Renew club membership"`.
 
 | Command | Behavior |
 | --- | --- |
 | `todo --init` | Initialize a todo list at `.todo/todos.jsonl` under the current Git working-tree root. Repeating the command preserves existing todos. |
 | `todo --open "Renew club membership"` | Create an open todo and print its ID. Accept optional `--priority`, `--due`, and `--note`. |
+| `todo Renew club membership --priority high` | Create an open todo from the words, joined with single spaces, and print its ID. Accept the same options as `--open`. |
 | `todo --list` | List open todos in priority order. |
 | `todo --today` | List open todos due on the machine's current local calendar date. |
 | `todo --show k7m2` | Show one open or completed todo, including every note in append order. |
@@ -24,11 +32,21 @@ Use one action flag per invocation. `todo` alone is shorthand for `todo --list`.
 | `todo --list --all` | Include completed todos in the list. |
 | `todo --delete k7m2` | Permanently remove an open or completed todo and its notes from the active data file. |
 | `todo --help` | Show syntax and examples. |
+| `todo --version` | Print `todo` and the specification version that the program meets, for example `todo 0.2`. |
+
+### Version
+
+The package version is the specification version with a patch number, for example `0.2.0` for version 0.2. `todo --version` reads the installed package version and prints its first two numbers. The version exists only in `pyproject.toml`.
 
 ### Input and output
 
 - Require a nonblank title on creation. A todo starts with priority `normal`, no due date, and zero notes unless supplied.
-- Accept priorities `high`, `normal`, and `low`. Accept due dates as valid calendar dates in `YYYY-MM-DD` format or the literal `today`, resolved at command execution.
+- Title words come before any option. A word after an option that the option does not take is invalid input. Words together with an action flag are invalid input. The command names are `init`, `open`, `list`, `today`, `show`, `update`, `note`, `done`, `delete` and `help`. If the words are exactly one command name, return 2 and suggest the flag, for example "did you mean --list?". `todo list groceries` still creates a todo.
+- Accept priorities `high`, `normal`, and `low`.
+- Accept a due date as a valid calendar date in `YYYY-MM-DD` format or as one of these words. When the command runs, resolve each word against the machine's local calendar date, and store the resulting `YYYY-MM-DD` date. Upper and lower case are the same.
+  - `today` is the current date. `tomorrow` is the day after it.
+  - A weekday name, `monday` to `sunday` or `mon` to `sun`, is the first date after today on that weekday. It is never today, so `monday` on a Monday is seven days later.
+  - `next week` is the first Monday after today. It is one argument, so quote it: `--due "next week"`. Without quotes, the left-over `week` is invalid input.
 - Each list row shows ID, status, priority, due date, and title. Sort by priority first, then earliest due date with undated items last, then creation time and ID. Past-due open items appear in `--list`. `--today` matches the exact date.
 - Show the todo's fields, timestamps, and full note text with `--show`. Store notes as separate entries and support Unicode and multiline text. Reject blank titles and notes.
 - Write successful results to stdout and errors to stderr. Return 0 on success, including an empty list, 2 for invalid CLI input, and 1 for a missing ID, disallowed state transition, or storage failure. Mutations print the affected ID after saving. Commands run without interactive prompts.
@@ -43,7 +61,9 @@ Resolve the data file in this order.
 
 1. An explicit `TODO_FILE` path, if set.
 2. The `.todo/todos.jsonl` at the current Git working-tree root, if it exists.
-3. The personal list at `~/.local/share/todo/todos.jsonl`.
+3. The personal list at `~/.todo/todos.jsonl`.
+
+The CLI does not read the version 0.1 path `~/.local/share/todo/todos.jsonl`. Move an existing file by hand. If the home directory is a Git working-tree root, steps 2 and 3 name the same file.
 
 Each UTF-8 line is one complete todo record. Use UTC ISO 8601 timestamps for creation, updates, completion, and notes. A due date is a date without a time zone.
 
@@ -64,6 +84,10 @@ Each UTF-8 line is one complete todo record. Use UTC ISO 8601 timestamps for cre
 4. Complete a todo and verify it disappears from `--list` and `--today`, remains visible via `--show` and `--list --all`, and keeps its original completion timestamp on repeated completion. Delete it and verify lookup fails.
 5. Force an ID collision and verify allocation retries. Run two writers against the same file and verify both changes persist. Simulate a failed write before replacement and verify the original data remains readable.
 6. Verify that invalid dates, empty notes, unknown IDs, and malformed records return errors without changing stored data.
+7. With a fixed local date, verify `tomorrow`, each weekday name in full and short form, and `next week`, in upper and lower case. On a Monday, verify that `monday` and `next week` give the date seven days later. On a Sunday, verify that `next week` gives the next day. Verify that `--due next week` without quotes returns 2 and stores nothing.
+8. Verify that `todo Buy milk` creates a todo titled "Buy milk", that `todo` alone lists, and that `todo list` returns 2 with a hint. Verify that words together with an action flag, and words after an option, return 2 and store nothing.
+9. Set `HOME` to a temporary directory. Verify that the first write outside a repository creates `~/.todo/todos.jsonl`. Verify that the CLI does not read a file at `~/.local/share/todo/todos.jsonl`.
+10. Verify that `todo --version` prints `todo 0.2` on stdout and returns 0, and that `--version` with any other argument returns 2.
 
 
 ## Git repository lists
