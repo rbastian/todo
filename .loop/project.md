@@ -61,7 +61,7 @@ There are no exceptions to the rule that agents do not write in the primary chec
 
 ## Tech stack
 
-- Python 3.12 or later, run through `uv`. The runtime uses only the standard library: `argparse`, `json`, `secrets`, `fcntl`, `os`, `tempfile`, `datetime` and `subprocess` for Git. Do not add runtime dependencies. The CLI installs as the `todo` command through a `[project.scripts]` entry and a build backend in `pyproject.toml`.
+- Python 3.12 or later, run through `uv`. The runtime uses the standard library (`argparse`, `json`, `secrets`, `fcntl`, `os`, `tempfile`, `datetime` and `subprocess` for Git) and `parsedatetime` for date phrases. Add a runtime dependency only when a bead names it, with `uv add`, so that `pyproject.toml` and `uv.lock` record it. The CLI installs as the `todo` command through a `[project.scripts]` entry and a build backend in `pyproject.toml`.
 - pytest for tests and ruff for format and lint. Tests run the CLI in a subprocess or through its `main(argv)` function, and they cover each acceptance check in the specification.
 - Git, for the repository lists. The code calls the `git` CLI to find the working-tree root and the Git metadata directory. The target platforms are macOS and Linux, because the lock uses `fcntl.flock`.
 
@@ -98,4 +98,4 @@ The reviewer always runs the default method for its engine. List here only the c
 - For a storage change, make sure that records keep a fixed key order, sorted by ID, with a newline at the end of every record.
 - For a date or time change, make sure that timestamps are UTC ISO 8601 and that `today` and `--today` use the local calendar date.
 - For a Git list change, make sure that lock and temporary files stay out of `git status`.
-- Make sure that no runtime dependency was added to `pyproject.toml`.
+- Make sure that every runtime dependency in `pyproject.toml` is one that the bead names, and that `uv.lock` records it.

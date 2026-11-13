@@ -5,7 +5,7 @@ Version 0.2
 ### Changes from 0.1
 
 - The personal list moves to `~/.todo/todos.jsonl`.
-- `--due` also accepts `tomorrow`, weekday names and `next week`.
+- `--due` also accepts English date phrases such as `tomorrow`, `friday` and `next week`, through the `parsedatetime` package.
 - Words without an action flag create a todo, for example `todo Buy milk`.
 - `todo --version` prints the specification version.
 
@@ -43,10 +43,11 @@ The package version is the specification version with a patch number, for exampl
 - Require a nonblank title on creation. A todo starts with priority `normal`, no due date, and zero notes unless supplied.
 - Title words come before any option. A word after an option that the option does not take is invalid input. Words together with an action flag are invalid input. The command names are `init`, `open`, `list`, `today`, `show`, `update`, `note`, `done`, `delete` and `help`. If the words are exactly one command name, return 2 and suggest the flag, for example "did you mean --list?". `todo list groceries` still creates a todo.
 - Accept priorities `high`, `normal`, and `low`.
-- Accept a due date as a valid calendar date in `YYYY-MM-DD` format or as one of these words. When the command runs, resolve each word against the machine's local calendar date, and store the resulting `YYYY-MM-DD` date. Upper and lower case are the same.
-  - `today` is the current date. `tomorrow` is the day after it.
-  - A weekday name, `monday` to `sunday` or `mon` to `sun`, is the first date after today on that weekday. It is never today, so `monday` on a Monday is seven days later.
-  - `next week` is the first Monday after today. It is one argument, so quote it: `--due "next week"`. Without quotes, the left-over `week` is invalid input.
+- Accept a due date as a valid calendar date in `YYYY-MM-DD` format or as an English date phrase. When the command runs, resolve the phrase against the machine's local date and time, and store the resulting `YYYY-MM-DD` date.
+  - Read `YYYY-MM-DD` first, with the standard library. Pass any other value to the `parsedatetime` package, with the current local date and time as the base.
+  - If `parsedatetime` finds no date in the phrase, the value is invalid input. A phrase with only a time of day, such as `3pm`, is invalid input. If the phrase also has a time, store only the date.
+  - These phrases must work, in upper or lower case: `today`, `tomorrow`, a weekday name such as `monday` or `mon`, `next week` and `in 3 days`. A weekday name is the first date after today on that weekday, so `monday` on a Monday is seven days later. `next week` is seven days after today.
+  - A phrase with spaces is one argument, so quote it: `--due "next week"`. Without quotes, the left-over word is invalid input.
 - Each list row shows ID, status, priority, due date, and title. Sort by priority first, then earliest due date with undated items last, then creation time and ID. Past-due open items appear in `--list`. `--today` matches the exact date.
 - Show the todo's fields, timestamps, and full note text with `--show`. Store notes as separate entries and support Unicode and multiline text. Reject blank titles and notes.
 - Write successful results to stdout and errors to stderr. Return 0 on success, including an empty list, 2 for invalid CLI input, and 1 for a missing ID, disallowed state transition, or storage failure. Mutations print the affected ID after saving. Commands run without interactive prompts.
@@ -84,7 +85,7 @@ Each UTF-8 line is one complete todo record. Use UTC ISO 8601 timestamps for cre
 4. Complete a todo and verify it disappears from `--list` and `--today`, remains visible via `--show` and `--list --all`, and keeps its original completion timestamp on repeated completion. Delete it and verify lookup fails.
 5. Force an ID collision and verify allocation retries. Run two writers against the same file and verify both changes persist. Simulate a failed write before replacement and verify the original data remains readable.
 6. Verify that invalid dates, empty notes, unknown IDs, and malformed records return errors without changing stored data.
-7. With a fixed local date, verify `tomorrow`, each weekday name in full and short form, and `next week`, in upper and lower case. On a Monday, verify that `monday` and `next week` give the date seven days later. On a Sunday, verify that `next week` gives the next day. Verify that `--due next week` without quotes returns 2 and stores nothing.
+7. With a fixed local date, verify `today`, `tomorrow`, each weekday name in full and short form, `next week` and `in 3 days`, in upper and lower case. On a Monday, verify that `monday` and `next week` give the date seven days later. On a Sunday, verify that `next week` gives the next Sunday. Verify that `3pm`, a misspelled phrase such as `nxet week`, and `--due next week` without quotes return 2 and store nothing.
 8. Verify that `todo Buy milk` creates a todo titled "Buy milk", that `todo` alone lists, and that `todo list` returns 2 with a hint. Verify that words together with an action flag, and words after an option, return 2 and store nothing.
 9. Set `HOME` to a temporary directory. Verify that the first write outside a repository creates `~/.todo/todos.jsonl`. Verify that the CLI does not read a file at `~/.local/share/todo/todos.jsonl`.
 10. Verify that `todo --version` prints `todo 0.2` on stdout and returns 0, and that `--version` with any other argument returns 2.
