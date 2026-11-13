@@ -16,7 +16,7 @@ def home(tmp_path, monkeypatch):
 
 @pytest.fixture
 def personal(home):
-    return home / ".local" / "share" / "todo" / "todos.jsonl"
+    return home / ".todo" / "todos.jsonl"
 
 
 @pytest.fixture
@@ -107,6 +107,13 @@ def test_git_missing_uses_personal(tmp_path, home, personal, monkeypatch):
     monkeypatch.setattr(subprocess, "run", missing)
     result = resolve_data_file(cwd=root, env={})
     assert result == Resolved(path=personal, repo_root=None)
+
+
+def test_home_as_repository_root_resolves_as_repository_list(home):
+    root = git_init(home)
+    data = add_repo_list(root)
+    result = resolve_data_file(cwd=root, env={})
+    assert result == Resolved(path=data, repo_root=root)
 
 
 def test_personal_list_is_not_created(home, personal, outside):
